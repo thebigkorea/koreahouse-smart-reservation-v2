@@ -742,7 +742,7 @@
 
       <div class="modal-actions">
         <button class="btn btn-light" onclick="closeModal()">닫기</button>
-        <button class="btn btn-gold" onclick="submitSample()">예약 등록</button>
+        <button id="reservationSubmitBtn" class="btn btn-gold" onclick="submitSample()"> 예약 등록</button>
       </div>
     </div>
   </div>
@@ -756,10 +756,80 @@
         weekday:"long"
       });
 
+
+    function resetReservationForm(){
+  document.getElementById("reserveDate").value = "";
+  document.getElementById("reserveTime").value = "";
+  document.getElementById("customerName").value = "";
+  document.getElementById("phone").value = "";
+  document.getElementById("people").value = "";
+  document.getElementById("seat").value = "";
+  document.getElementById("eventType").value = "";
+  document.getElementById("menu").value = "";
+  document.getElementById("deposit").value = "";
+  document.getElementById("staff").value = "";
+  document.getElementById("memo").value = "";
+
+  reservedSeatMap = {};
+
+  const selectedDateBox =
+    document.getElementById("selectedDateReservationBox");
+
+  if(selectedDateBox){
+    selectedDateBox.style.display = "none";
+    selectedDateBox.innerHTML = "";
+  }
+
+  const notice = document.getElementById("seatNotice");
+
+  if(notice){
+    notice.style.display = "none";
+  }
+
+  const selectedText = document.getElementById("selectedSeatText");
+
+  if(selectedText){
+    selectedText.textContent = "선택된 좌석 없음";
+    selectedText.classList.remove(
+      "seat-total-ok",
+      "seat-total-warn"
+    );
+  }
+}
+
+function setReservationSubmitLoading(isLoading){
+  const button = document.getElementById("reservationSubmitBtn");
+  if(!button) return;
+
+  button.disabled = isLoading;
+
+  if(isLoading){
+    button.textContent = "처리중...";
+    button.style.opacity = "0.65";
+    button.style.cursor = "wait";
+  }else{
+    button.textContent =
+      editingReservationNo ? "수정 저장" : "예약 등록";
+
+    button.style.opacity = "1";
+    button.style.cursor = "pointer";
+  }
+}  
+
     function openModal(){
-      document.getElementById("modalBg").style.display = "flex";
-      renderSeatMap();
-    }
+  editingReservationNo = "";
+
+  resetReservationForm();
+  setReservationSubmitLoading(false);
+
+  document.querySelector(
+    "#modalBg .modal-head h2"
+  ).textContent = "새 예약 등록";
+
+  document.getElementById("modalBg").style.display = "flex";
+
+  renderSeatMap();
+}
     
     
 
@@ -958,11 +1028,15 @@
         if (!proceed) return;
       }
 
+      setReservationSubmitLoading(true);
+
       if (editingReservationNo) {
        data.reservationNo = editingReservationNo;
 
        google.script.run
         .withSuccessHandler(function(res){
+           setReservationSubmitLoading(false);
+
           if (!res || res.ok === false) {
            alert(res.message || "예약 수정 실패");
            console.log(res);
@@ -970,10 +1044,14 @@
          }
 
           alert(res.message || "예약이 수정되었습니다.");
+
+          setReservationSubmitLoading(false);
           closeModal();
           loadReservations();
         })
         .withFailureHandler(function(err){
+         setReservationSubmitLoading(false);
+
           alert("예약 수정 오류: " + ((err && err.message) ? err.message : err));
         })
         .updateReservationApi(data);
@@ -984,16 +1062,22 @@
       google.script.run
         .withSuccessHandler(function(res){
       if (!res || res.ok === false) {
+        setReservationSubmitLoading(false);
+
         alert(res.message || "예약 저장 실패");
         console.log(res);
         return;
       }
 
       alert(res.message || "예약이 등록되었습니다.");
+
+      setReservationSubmitLoading(false);
       closeModal();
       loadReservations();
     })
         .withFailureHandler(function(err){
+          setReservationSubmitLoading(false);
+
           alert("예약 등록 오류: " + ((err && err.message) ? err.message : err));
         })
         .saveReservation(data);
