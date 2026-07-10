@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+
+  <title>한국의집 고객관리 CRM</title>
+
+  <?!= include('style'); ?>
+</head>
+
+<body>
+  
+<div class="crm-page">
+
+  <div class="hero">
+    <div class="hero-row">
+
+      <div>
+        <h1>한국의집 고객관리 CRM</h1>
+        <p>
+          고객검색 · 예약이력 · 메모 · VIP관리 · 문자발송을
+          한 화면에서 관리합니다.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+
+  <section class="panel">
+
+      <div class="panel-title">
+          <h2>고객검색</h2>
+      </div>
+
+      <input
+          type="text"
+          id="customerSearch"
+          class="input"
+          placeholder="고객명 또는 전화번호를 입력하세요">
+
+  </section>
+
+
+  <div class="crm-main">
+
+    <section class="panel crm-list">
+
+        <div class="panel-title">
+            <h2>고객목록</h2>
+            <span id="crmCustomerCount" class="badge gray">0명</span>
+        </div>
+
+        <div id="customerListArea">
+
+            고객목록 영역
+
+        </div>
+
+    </section>
+
+
+    <section class="panel crm-detail">
+
+        <div class="panel-title">
+            <h2>고객상세</h2>
+        </div>
+
+        <div id="customerDetailArea">
+
+            고객을 선택하세요.
+
+        </div>
+
+    </section>
+
+</div>
+
+</div>
+
+<?!= include('CustomerManagerUtil'); ?>
+<?!= include('CustomerManagerList'); ?>
+<?!= include('CustomerManagerMemo'); ?>
+<?!= include('CustomerManagerScript'); ?>
+
+</body>
+</html>

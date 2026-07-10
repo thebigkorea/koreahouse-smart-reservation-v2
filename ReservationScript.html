@@ -1,0 +1,1105 @@
+ <script>
+    document.getElementById("todayText").textContent =
+      new Date().toLocaleDateString("ko-KR", {
+        year:"numeric",
+        month:"long",
+        day:"numeric",
+        weekday:"long"
+      });
+
+    function openModal(){
+      document.getElementById("modalBg").style.display = "flex";
+      renderSeatMap();
+    }
+
+    function closeModal(){
+       document.getElementById("modalBg").style.display = "none";
+       editingReservationNo = "";
+
+       document.querySelector("#modalBg .modal-head h2").textContent = "새 예약 등록";
+       document.querySelector("#modalBg .btn.btn-gold").textContent = "예약 등록";
+     }
+
+    function formatPhoneInput(input){
+      let value = input.value.replace(/[^0-9]/g, "");
+      if(value.length > 11) value = value.slice(0,11);
+
+      if(value.length <= 3){
+        input.value = value;
+      }else if(value.length <= 7){
+        input.value = value.slice(0,3) + "-" + value.slice(3);
+      }else{
+        input.value =
+          value.slice(0,3) + "-" +
+          value.slice(3,7) + "-" +
+          value.slice(7);
+      }
+    }
+
+    function findCustomerByPhoneInput(){
+
+    const phone = document.getElementById("phone").value.trim();
+    const box = document.getElementById("customerInfoBox");
+
+    if(!box) return;
+
+    if(phone.replace(/[^0-9]/g,"").length < 10){
+        box.style.display="none";
+        return;
+    }
+
+    google.script.run
+    .withSuccessHandler(function(res){
+
+        if(!res || !res.found){
+            box.style.display="none";
+            return;
+        }
+
+        document.getElementById("customerName").value =
+            res.customerName || "";
+
+        box.style.display="block";
+
+        box.innerHTML = `
+            <div style="font-size:15px;font-weight:bold;margin-bottom:8px;">
+                ${res.tag ? "🏷️ "+res.tag : "기존 고객"}
+            </div>
+
+            <div>⭐ 등급 : ${res.grade || "-"}</div>
+            <div>🍱 즐겨찾는 메뉴 : ${res.favoriteMenu || "-"}</div>
+            <div>⚠️ 알레르기 : ${res.allergy || "-"}</div>
+
+            <div style="margin-top:8px;">
+                📝 ${res.memo || "메모 없음"}
+            </div>
+        `;
+    })
+    .withFailureHandler(function(err){
+        console.log(err);
+    })
+    .searchCustomerApi(phone);
+
+}
+
+    function checkSeatSample(){
+      const date = document.getElementById("reserveDate").value;
+      const time = document.getElementById("reserveTime").value;
+      const seat = document.getElementById("seat").value;
+
+      document.getElementById("seatNotice").style.display =
+        date && time && seat ? "block" : "none";
+    }
+
+
+    const SEAT_ZONES = [
+  
+  { title:"룸", compact:false, seats:["청우정","녹음정","우금헌","소화당"] },
+  { title:"A구역", compact:true, seats:["A1","A2","A3","A4","A5","A6","A7","분A3","분A5"] },
+  { title:"B구역", compact:true, seats:["B1","B2","B3","B4","B5","B6","B7","B8","B9","B10"] },
+  { title:"C구역", compact:true, seats:["C1","C2","C3","C4","C5","C6","분C4","분C5"] },  
+  { title:"D구역", compact:true, seats:["D1","D2","D3","D4"] },
+  { title:"중정", compact:true, seats:["중정1","중정2","중정3","중정4","중정5"] }
+];
+
+    const SEAT_CAPACITY = {
+  "청우정":8,
+  "녹음정":6,
+  "우금헌":6,
+  "소화당":6,
+
+  "A1":4,"A2":4,"A3":6,"A4":4,"A5":6,"A6":4,"A7":4,
+  "B1":2,"B2":2,"B3":2,"B4":2,"B5":4,"B6":4,"B7":4,"B8":2,"B9":4,"B10":4,
+  "C1":4,"C2":4,"C3":4,"C4":6,"C5":6,"C6":4,
+  "D1":2,"D2":2,"D3":2,"D4":4,
+
+  "분A3":2,
+  "분A5":2,
+  "분C4":2,
+  "분C5":2,
+
+  "중정1":2,
+  "중정2":2,
+  "중정3":2,
+  "중정4":2,
+  "중정5":2
+};
+
+    function getSelectedSeats(){
+      const raw = document.getElementById("seat")?.value || "";
+      return raw.split(",").map(v => v.trim()).filter(Boolean);
+    }
+
+    function setSelectedSeats(list){
+      document.getElementById("seat").value = list.join(", ");
+    }
+
+    function getSelectedCapacity(list){
+      return list.reduce(function(sum, name){
+        return sum + Number(SEAT_CAPACITY[name] || 0);
+      }, 0);
+    }
+
+    function renderSeatMap(){
+      const map = document.getElementById("seatMap");
+      if(!map) return;
+
+      const people = Number(document.getElementById("people")?.value || 0);
+      const selectedList = getSelectedSeats();
+      const selectedTotal = getSelectedCapacity(selectedList);
+      const selectedText = document.getElementById("selectedSeatText");
+
+      if(selectedText){
+        if(selectedList.length){
+          const status = people > 0
+            ? (selectedTotal >= people ? "가능" : "부족")
+            : "인원 입력 전";
+
+          selectedText.textContent =
+            selectedList.join(", ") +
+            " · 총 " + selectedTotal + "인석" +
+            (people ? " / 예약 " + people + "명 · " + status : "");
+
+          selectedText.classList.toggle("seat-total-ok", people > 0 && selectedTotal >= people);
+          selectedText.classList.toggle("seat-total-warn", people > 0 && selectedTotal < people);
+        }else{
+          selectedText.textContent = "선택된 좌석 없음";
+          selectedText.classList.remove("seat-total-ok", "seat-total-warn");
+        }
+      }
+
+      map.innerHTML = SEAT_ZONES.map(function(zone){
+  const buttons = zone.seats.map(function(name){
+    const cap = SEAT_CAPACITY[name] || 0;
+    const selected = selectedList.includes(name);
+    const reservedInfo = reservedSeatMap[name];
+    const cls = ["seat-btn"];
+
+    if (reservedInfo) cls.push("reserved");
+    if (selected) cls.push("selected");
+    if (!selected && people > 0 && cap < people) cls.push("unselected-small");
+
+    return `
+      <button type="button"
+              class="${cls.join(" ")}"
+              title="${reservedInfo ? reservedInfo.customerName + ' / ' + reservedInfo.reserveTime + ' / ' + reservedInfo.people + '명 / ' + reservedInfo.status : name + ' ' + cap + '인석'}"
+              onclick="${reservedInfo ? "return false;" : "toggleSeat('" + name + "')"}">
+        ${name}
+        <small>${reservedInfo ? "예약됨" : cap + "인석"}</small>
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="seat-zone ${zone.compact ? "compact" : ""}">
+      <h4>${zone.title}</h4>
+      <div class="seat-buttons">${buttons}</div>
+    </div>
+  `;
+}).join("");
+}
+
+    function toggleSeat(name){
+      let selectedList = getSelectedSeats();
+
+      if(selectedList.includes(name)){
+        selectedList = selectedList.filter(v => v !== name);
+      }else{
+        selectedList.push(name);
+      }
+
+      setSelectedSeats(selectedList);
+      renderSeatMap();
+      checkSeatSample();
+    }
+
+    function submitSample(){
+      const data = {
+        reserveDate: document.getElementById("reserveDate").value.trim(),
+        reserveTime: document.getElementById("reserveTime").value.trim(),
+        customerName: document.getElementById("customerName").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        people: document.getElementById("people").value.trim(),
+        seat: document.getElementById("seat").value.trim(),
+        eventType: document.getElementById("eventType").value.trim(),
+        menu: document.getElementById("menu").value.trim(),
+        deposit: document.getElementById("deposit").value.trim(),
+        staff: document.getElementById("staff").value.trim(),
+        memo: document.getElementById("memo").value.trim(),
+        channel: "전화"
+      };
+
+      if (!data.reserveDate || !data.reserveTime || !data.customerName || !data.phone || !data.people) {
+        alert("예약일, 예약시간, 고객명, 전화번호, 인원은 필수입니다.");
+        return;
+      }
+
+      const selectedSeats = getSelectedSeats();
+      const selectedCapacity = getSelectedCapacity(selectedSeats);
+
+      if (!selectedSeats.length) {
+        alert("좌석을 선택해 주세요.");
+        return;
+      }
+
+      if (selectedCapacity < Number(data.people || 0)) {
+        const proceed = confirm(
+          "선택한 좌석의 총 수용인원은 " + selectedCapacity + "명입니다.\n" +
+          "예약 인원은 " + data.people + "명입니다.\n\n" +
+          "유아 동반 또는 매장 판단으로 진행하는 경우 그대로 저장할 수 있습니다.\n" +
+          "이 좌석으로 예약을 저장하시겠습니까?"
+        );
+
+        if (!proceed) return;
+      }
+
+      if (editingReservationNo) {
+       data.reservationNo = editingReservationNo;
+
+       google.script.run
+        .withSuccessHandler(function(res){
+          if (!res || res.ok === false) {
+           alert(res.message || "예약 수정 실패");
+           console.log(res);
+           return;
+         }
+
+          alert(res.message || "예약이 수정되었습니다.");
+          closeModal();
+          location.reload();
+        })
+        .withFailureHandler(function(err){
+          alert("예약 수정 오류: " + ((err && err.message) ? err.message : err));
+        })
+        .updateReservationApi(data);
+
+      return;
+    }
+
+      google.script.run
+        .withSuccessHandler(function(res){
+      if (!res || res.ok === false) {
+        alert(res.message || "예약 저장 실패");
+        console.log(res);
+        return;
+      }
+
+      alert(res.message || "예약이 등록되었습니다.");
+      closeModal();
+      location.reload();
+    })
+        .withFailureHandler(function(err){
+          alert("예약 등록 오류: " + ((err && err.message) ? err.message : err));
+        })
+        .saveReservation(data);
+    }
+
+    let reservationData = [];
+    let editingReservationNo = "";
+
+    let reservedSeatMap = {};
+
+function showSection(sectionId){
+  const sections = [
+    "dashboardSection",
+    "calendarSection",
+    "reservationStatusSection"
+  ];
+
+  sections.forEach(function(id){
+    const el = document.getElementById(id);
+    if(el){
+      el.style.display = (id === sectionId) ? "" : "none";
+    }
+  });
+
+  if(sectionId === "calendarSection"){
+    renderCalendar();
+  }
+
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+
+function loadReservedSeatStatus(){
+  const reserveDate = document.getElementById("reserveDate").value;
+  const reserveTime = document.getElementById("reserveTime").value;
+
+  if(!reserveDate || !reserveTime){
+    reservedSeatMap = {};
+    renderSeatMap();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(map){
+      reservedSeatMap = map || {};
+      renderSeatMap();
+    })
+    .withFailureHandler(function(err){
+      alert("좌석 예약상태 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getReservedSeatStatusApi({
+      reserveDate: reserveDate,
+      reserveTime: reserveTime,
+      reservationNoToIgnore: editingReservationNo || ""
+    });
+}
+
+
+document.addEventListener("DOMContentLoaded", function(){
+  renderSeatMap();
+  loadReservations();
+  showSection("dashboardSection");
+});
+
+function loadReservations(){
+  
+  google.script.run
+    .withSuccessHandler(function(list){
+      reservationData = list || [];
+
+      updateDashboardCards(reservationData);
+
+      updateTodayTasks(reservationData);
+
+      renderTodayTimeline();
+
+      renderTodaySeatStatus();
+
+      renderReservationTable();
+    })
+    .withFailureHandler(function(err){
+      alert("예약현황 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getReservationList();
+}
+
+function renderReservationTable(){
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const tbody = document.getElementById("reservationTableBody");
+
+  const list = reservationData.filter(function(r){
+    const text = [
+      r.reservationNo,
+      r.reserveDate,
+      r.reserveTime,
+      r.customerName,
+      r.phone,
+      r.people,
+      r.seat,
+      r.menu,
+      r.depositStatus,
+      r.reserveStatus,
+      r.staff
+    ].join(" ").toLowerCase();
+
+    return text.includes(q);
+  });
+
+  document.getElementById("reservationCount").textContent = list.length + "건";
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:#78909c;">예약 내역이 없습니다.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map(function(r){
+    return `
+      <tr>
+  <td>
+    <input type="checkbox"
+           class="reservation-check"
+           value="${escapeHtml(r.reservationNo)}">
+  </td>
+  <td>${escapeHtml(r.reserveDate)}</td> 
+        <td><b>${escapeHtml(r.reserveTime)}</b></td>
+        <td class="left"><b>${escapeHtml(r.customerName)}</b></td>
+        <td>${escapeHtml(r.phone)}</td>
+        <td>${escapeHtml(r.people)}명</td>
+        <td>${escapeHtml(r.seat)}</td>
+        <td class="left">${escapeHtml(r.menu)}</td>
+        <td>${badgeText(r.depositStatus)}</td>
+        <td>${badgeText(r.reserveStatus)}</td>
+        <td>${escapeHtml(r.staff)}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-light" onclick="showReservationDetail('${r.reservationNo}')">상세</button>
+            <button class="btn btn-light" onclick="openEditReservation('${r.reservationNo}')">수정</button>
+            <button class="btn btn-green" onclick="markDepositDone('${r.reservationNo}')">입금</button>
+            <button class="btn btn-light" onclick="confirmReservation('${r.reservationNo}')">확정</button>
+            <button class="btn btn-yellow" onclick="openMessageModal('${r.reservationNo}')">문자</button>
+           <button class="btn btn-cancel" onclick="cancelReservation('${r.reservationNo}')">취소</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function updateDashboardCards(list){
+
+  const today = new Date().toISOString().slice(0,10);
+
+  const todayList = list.filter(r => r.reserveDate === today);
+
+  const people = todayList.reduce(function(sum,r){
+    return sum + Number(r.people || 0);
+  },0);
+
+  const waiting = todayList.filter(function(r){
+    return String(r.depositStatus).includes("미입금") ||
+           String(r.depositStatus).includes("대기");
+  }).length;
+
+  const confirmed = todayList.filter(function(r){
+    return String(r.reserveStatus).includes("확정");
+  }).length;
+
+  document.getElementById("todayReservationCount").textContent =
+      todayList.length + "건";
+
+  document.getElementById("todayPeopleCount").textContent =
+      people + "명";
+
+  document.getElementById("depositWaitingCount").textContent =
+      waiting + "건";
+
+  document.getElementById("confirmedReservationCount").textContent =
+      confirmed + "건";
+}
+
+function badgeText(text){
+  const t = String(text || "-");
+  let cls = "gray";
+
+  if (t.includes("확정") || t.includes("완료")) cls = "ok";
+  if (t.includes("대기") || t.includes("미입금")) cls = "wait";
+  if (t.includes("취소")) cls = "wait";
+
+  return `<span class="badge ${cls}">${escapeHtml(t)}</span>`;
+}
+
+function escapeHtml(value){
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+function renderTodayTimeline(){
+
+  const today = new Date().toISOString().slice(0,10);
+
+  const list = reservationData
+      .filter(r=>r.reserveDate===today)
+      .sort((a,b)=>a.reserveTime.localeCompare(b.reserveTime));
+
+  const box=document.getElementById("todayTimeline");
+
+  if(!list.length){
+      box.innerHTML=`
+      <div class="empty-box">
+        오늘 예약이 없습니다.
+      </div>`;
+      return;
+  }
+
+  box.innerHTML=list.map(r=>`
+
+<div class="reservation-card">
+
+<div class="reservation-top">
+
+<div class="reservation-time">
+${r.reserveTime}
+</div>
+
+<span class="badge ${r.reserveStatus.includes("확정")?"ok":"wait"}">
+${r.reserveStatus}
+</span>
+
+</div>
+
+<div class="reservation-name">
+${r.customerName}
+</div>
+
+<div class="reservation-info">
+
+☎ ${r.phone}<br>
+
+${r.people}명 · ${r.seat} · ${r.menu}<br>
+
+담당 : ${r.staff}
+
+</div>
+
+<div class="reservation-buttons">
+
+<button class="btn btn-light">전화</button>
+
+<button class="btn btn-light" onclick="showReservationDetail('${r.reservationNo}')">상세</button>
+
+<button class="btn btn-yellow" onclick="openEditReservation('${r.reservationNo}')">수정</button>
+
+</div>
+
+</div>
+
+`).join("");
+
+}
+
+function renderTodaySeatStatus(){
+  const box = document.getElementById("todaySeatGrid");
+  if (!box) return;
+
+  const today = new Date().toISOString().slice(0,10);
+
+  const zones = [
+    { title:"룸", seats:["청우정","녹음정","우금헌","소화당"] },
+    { title:"A구역", seats:["A1","A2","A3","A4","A5","A6","A7","분A3","분A5"] },
+    { title:"B구역", seats:["B1","B2","B3","B4","B5","B6","B7","B8","B9","B10"] },
+    { title:"C구역", seats:["C1","C2","C3","C4","C5","C6","분C4","분C5"] },
+    { title:"D구역", seats:["D1","D2","D3","D4"] },
+    { title:"중정", seats:["중정1","중정2","중정3","중정4","중정5"] }
+  ];
+
+  const todayList = reservationData
+    .filter(function(r){
+      return r.reserveDate === today &&
+             !String(r.reserveStatus || "").includes("취소") &&
+             !String(r.reserveStatus || "").includes("노쇼");
+    })
+    .sort(function(a,b){
+      return String(a.reserveTime || "").localeCompare(String(b.reserveTime || ""));
+    });
+
+  box.innerHTML = zones.map(function(zone){
+    const rows = [];
+
+    todayList.forEach(function(r){
+      const seatText = String(r.seat || "");
+      zone.seats.forEach(function(seatName){
+        if (seatText.split(",").map(v => v.trim()).includes(seatName)) {
+          rows.push(`
+            <div class="seat-row">
+              <span>${escapeHtml(r.reserveTime)} · ${escapeHtml(seatName)}</span>
+              <b class="busy">${escapeHtml(r.customerName)}</b>
+            </div>
+          `);
+        }
+      });
+    });
+
+    return `
+      <div class="seat-card">
+        <h3>${zone.title}</h3>
+        ${
+          rows.length
+            ? rows.join("")
+            : '<div class="seat-row"><span>오늘 예약</span><b class="free">가능</b></div>'
+        }
+      </div>
+    `;
+  }).join("");
+}
+
+function updateTodayTasks(list){
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0,10);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate()+1);
+
+  const tomorrowStr = tomorrow.toISOString().slice(0,10);
+
+  const waiting = list.filter(function(r){
+    return r.reserveDate===todayStr &&
+      (
+        String(r.depositStatus).includes("미입금") ||
+        String(r.depositStatus).includes("대기")
+      );
+  }).length;
+
+  const tomorrowGuide=list.filter(function(r){
+    return r.reserveDate===tomorrowStr;
+  }).length;
+
+  const todayVisit=list.filter(function(r){
+    return r.reserveDate===todayStr;
+  }).length;
+
+  document.getElementById("waitingDepositCount").textContent =
+      waiting+"건";
+
+  document.getElementById("tomorrowGuideCount").textContent =
+      tomorrowGuide+"건";
+
+  document.getElementById("todayVisitCount").textContent =
+      todayVisit+"건";
+}
+
+function showReservationDetail(reservationNo){
+  const item = reservationData.find(function(r){
+    return r.reservationNo === reservationNo;
+  });
+
+  if (!item) {
+    alert("예약정보를 찾을 수 없습니다.");
+    return;
+  }
+
+  document.getElementById("reservationDetailBox").innerHTML = `
+    <b>예약번호</b> : ${escapeHtml(item.reservationNo)}<br>
+    <b>예약일</b> : ${escapeHtml(item.reserveDate)}<br>
+    <b>예약시간</b> : ${escapeHtml(item.reserveTime)}<br>
+    <b>고객명</b> : ${escapeHtml(item.customerName)}<br>
+    <b>전화번호</b> : ${escapeHtml(item.phone)}<br>
+    <b>인원</b> : ${escapeHtml(item.people)}명<br>
+    <b>좌석</b> : ${escapeHtml(item.seat)}<br>
+    <b>행사구분</b> : ${escapeHtml(item.eventType)}<br>
+    <b>메뉴</b> : ${escapeHtml(item.menu)}<br>
+    <b>예약금</b> : ${escapeHtml(item.deposit)}<br>
+    <b>입금상태</b> : ${escapeHtml(item.depositStatus)}<br>
+    <b>예약상태</b> : ${escapeHtml(item.reserveStatus)}<br>
+    <b>담당자</b> : ${escapeHtml(item.staff)}<br>
+    <b>메모</b> : ${escapeHtml(item.memo)}
+        <br><br>
+    <div class="table-actions">
+      <button class="btn btn-yellow" onclick="markNoShow('${item.reservationNo}')">노쇼</button>
+      <button class="btn btn-light" onclick="cancelReservation('${item.reservationNo}')">취소</button>
+    </div>
+  `;
+
+  document.getElementById("detailModalBg").style.display = "flex";
+}
+
+function openEditReservation(reservationNo){
+
+  const item = reservationData.find(function(r){
+    return r.reservationNo === reservationNo;
+  });
+
+  if(!item){
+    alert("예약정보를 찾을 수 없습니다.");
+    return;
+  }
+
+  editingReservationNo = reservationNo;
+
+  // ▼ 여기 추가
+  document.querySelector("#modalBg .modal-head h2").textContent = "예약 수정";
+  document.querySelector("#modalBg .btn.btn-gold").textContent = "수정 저장";
+
+  // 예약등록 모달 열기
+  document.getElementById("modalBg").style.display = "flex";
+
+  // 기존 데이터 채우기
+  document.getElementById("reserveDate").value = item.reserveDate;
+  document.getElementById("reserveTime").value = item.reserveTime;
+  document.getElementById("customerName").value = item.customerName;
+  document.getElementById("phone").value = item.phone;
+  document.getElementById("people").value = item.people;
+  document.getElementById("seat").value = item.seat;
+  document.getElementById("eventType").value = item.eventType;
+  document.getElementById("menu").value = item.menu;
+  document.getElementById("deposit").value = item.deposit;
+  document.getElementById("staff").value = item.staff;
+  document.getElementById("memo").value = item.memo || "";
+  loadReservedSeatStatus();
+  renderSeatMap();
+
+// 상세 모달이 열려있다면 닫기
+  closeDetailModal();
+  }
+
+function closeDetailModal(){
+  document.getElementById("detailModalBg").style.display = "none";
+}
+
+
+function markNoShow(reservationNo){
+  const reason = prompt("노쇼 사유를 입력하세요.", "고객 미방문");
+
+  if(reason === null) return;
+
+  if(!confirm("노쇼 처리하시겠습니까?")) return;
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert(res.message || "노쇼 처리 실패");
+        return;
+      }
+
+      alert(res.message || "노쇼 처리되었습니다.");
+      closeDetailModal();
+      loadReservations();
+    })
+    .withFailureHandler(function(err){
+      alert("노쇼 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .markNoShowApi(reservationNo, "한경란", reason);
+}
+
+function markDepositDone(reservationNo){
+  if(!confirm("입금완료로 변경하시겠습니까?")) return;
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert(res.message || "입금완료 처리 실패");
+        return;
+      }
+
+      alert(res.message || "입금완료 처리되었습니다.");
+      loadReservations();
+    })
+    .withFailureHandler(function(err){
+      alert("입금완료 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .markDepositDoneApi(reservationNo, "한경란");
+}
+
+function cancelReservation(reservationNo){
+
+  if (!confirm("예약을 취소하시겠습니까?")) return;
+
+  const staff = prompt("취소 처리 담당자 이름을 입력하세요.", "한경란");
+  if (staff === null) return;
+
+  const reason = prompt("취소 사유를 입력하세요.", "고객 요청");
+  if (reason === null) return;
+
+  google.script.run
+    .withSuccessHandler(function(result){
+
+      alert(result.message || "예약이 취소되었습니다.");
+
+      loadReservations();
+      loadReservedSeatStatus();
+
+    })
+    .withFailureHandler(function(err){
+      alert("예약 취소 실패 : " + ((err && err.message) ? err.message : err));
+    })
+    .cancelReservationApi(reservationNo, staff, reason);
+}
+
+function confirmReservation(reservationNo){
+  if(!confirm("예약확정으로 변경하시겠습니까?")) return;
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert(res.message || "예약확정 처리 실패");
+        return;
+      }
+
+      alert(res.message || "예약확정 처리되었습니다.");
+      loadReservations();
+    })
+    .withFailureHandler(function(err){
+      alert("예약확정 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .confirmReservationApi(reservationNo, "한경란");
+}
+
+function chooseSmsType_(){
+  const selected = prompt(
+    "발송할 문자 종류를 선택하세요.\n\n" +
+    "1. 예약접수 안내\n" +
+    "2. 예약확정 안내\n" +
+    "3. 내일 예약 안내\n" +
+    "4. 방문 감사\n" +
+    "5. 예약취소 안내\n" +
+    "6. 노쇼 안내\n" +
+    "7. 직접 작성",
+    "1"
+  );
+
+  if(selected === null) return "";
+
+  if(selected === "1") return "deposit";
+  if(selected === "2") return "confirm";
+  if(selected === "3") return "tomorrow";
+  if(selected === "4") return "thanks";
+  if(selected === "5") return "cancel";
+  if(selected === "6") return "noshow";
+  if(selected === "7") return "custom";
+
+  return "deposit";
+}
+
+function openMessageModal(reservationNo){
+  alert("개별 문자 버튼 클릭됨: " + reservationNo);
+
+  const item = reservationData.find(function(r){
+    return String(r.reservationNo) === String(reservationNo);
+  });
+
+  if(!item){
+    alert("예약정보를 찾을 수 없습니다.");
+    return;
+  }
+
+  const targetList = document.getElementById("bulkTargetList");
+  const messageText = document.getElementById("bulkMessageText");
+  const modalBg = document.getElementById("messageModalBg");
+
+  if(!targetList || !messageText || !modalBg){
+    alert("문자발송 모달을 찾을 수 없습니다.");
+    return;
+  }
+
+  document.querySelectorAll(".reservation-check").forEach(function(chk){
+    chk.checked = String(chk.value) === String(reservationNo);
+  });
+
+  targetList.innerHTML = "☑ " + item.customerName + " (" + item.phone + ")";
+  messageText.value = "";
+  window.selectedTemplateType = "custom";
+  modalBg.style.display = "flex";
+}
+
+function confirmAndSendOneSms_(item, message){
+  const ok = confirm(
+    message +
+    "\n\n-------------------------\n위 내용으로 문자를 발송하시겠습니까?"
+  );
+
+  if(!ok) return;
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(res && res.ok){
+        alert("문자가 발송되었습니다.");
+      }else{
+        alert((res && res.message) ? res.message : "문자 발송 실패");
+      }
+    })
+    .withFailureHandler(function(err){
+      alert("문자 발송 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
+}
+
+function selectMessageTemplate(type){   
+
+  window.selectedTemplateType = type;
+
+  const textarea = document.getElementById("bulkMessageText");
+  const list = getSelectedReservations();
+
+  if(!textarea){
+    alert("문자 입력창을 찾을 수 없습니다.");
+    return;
+  }
+
+  if(!list.length){
+    alert("예약을 먼저 선택하세요.");
+    return;
+  }
+
+  if(type === "custom"){
+    textarea.value = "";
+    textarea.focus();
+    return;
+  }
+
+  textarea.value = "템플릿을 불러오는 중입니다...";
+
+  google.script.run
+    .withSuccessHandler(function(message){
+      if(!message){
+        textarea.value = "";
+        alert("템플릿 내용이 비어 있습니다. SmsTemplates 시트를 확인하세요.");
+        return;
+      }
+
+      textarea.value = message;
+    })
+    .withFailureHandler(function(err){
+      textarea.value = "";
+      alert("템플릿 불러오기 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .renderSmsTemplate(type, list[0]);
+}
+
+function closeBulkMessageModal(){
+  document.getElementById("messageModalBg").style.display = "none";
+}
+
+function sendBulkMessages(){
+  
+  const list = getSelectedReservations();
+  const type = window.selectedTemplateType || "custom";
+
+  if(!list.length){
+    alert("예약을 선택하세요.");
+    return;
+  }
+
+  if(type === "custom"){
+    const customText = document.getElementById("bulkMessageText").value.trim();
+    if(!customText){
+      alert("문자 내용을 입력하세요.");
+      return;
+    }
+  }
+
+  if(!confirm(list.length + "명에게 문자를 발송하시겠습니까?")){
+    return;
+  }
+
+  sendNextBulkSMS(list, 0, type);
+}
+
+function sendNextBulkSMS(list, index, type){
+  
+  if(index >= list.length){
+    alert(list.length + "명 문자 발송이 완료되었습니다.");
+    closeBulkMessageModal();
+    loadReservations();
+    return;
+  }
+
+  const item = list[index];
+
+  if(type === "custom"){
+    const message = document.getElementById("bulkMessageText").value.trim();
+    sendBulkSmsNow_(list, index, type, item, message);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(message){
+      if(!message){
+        alert(item.customerName + " 문자 템플릿을 찾을 수 없습니다.");
+        return;
+      }
+
+      sendBulkSmsNow_(list, index, type, item, message);
+    })
+    .withFailureHandler(function(err){
+      alert(item.customerName + " 템플릿 생성 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .renderSmsTemplate(type, item);
+}
+
+function sendBulkSmsNow_(list, index, type, item, message){
+  if(!message){
+    alert("문자 내용이 없습니다.");
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(res && res.ok === false){
+        alert(item.customerName + " 문자 발송 실패: " + (res.message || ""));
+        return;
+      }
+
+      sendNextBulkSMS(list, index + 1, type);
+    })
+    .withFailureHandler(function(err){
+      alert(item.customerName + " 문자 발송 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
+}
+
+function sendSelectedReservations(){
+  const list = getSelectedReservations();
+
+  if(!list.length){
+    alert("예약을 선택하세요.");
+    return;
+  }
+
+  const targetList = document.getElementById("bulkTargetList");
+  const messageText = document.getElementById("bulkMessageText");
+  const modalBg = document.getElementById("messageModalBg");
+
+  if(!targetList || !messageText || !modalBg){
+    alert("선택 문자 발송 모달을 찾을 수 없습니다.");
+    return;
+  }
+
+  targetList.innerHTML = list.map(function(r){
+    return "☑ " + r.customerName + " (" + r.phone + ")";
+  }).join("<br>");
+
+  messageText.value = "";
+  window.selectedTemplateType = "custom";
+  modalBg.style.display = "flex";
+}
+
+function getSelectedReservations(){
+  const checked = document.querySelectorAll(".reservation-check:checked");
+  const list = [];
+
+  checked.forEach(function(chk){
+    const item = reservationData.find(function(r){
+      return r.reservationNo === chk.value;
+    });
+
+    if(item){
+      list.push(item);
+    }
+  });
+
+  return list;
+}
+
+function clearReservationChecks(){
+  document.querySelectorAll(".reservation-check").forEach(function(chk){
+    chk.checked = false;
+  });
+
+  const master = document.getElementById("checkAllReservations");
+  if(master){
+    master.checked = false;
+  }
+}
+
+function toggleAllReservations(){
+  const master = document.getElementById("checkAllReservations");
+  const checks = document.querySelectorAll(".reservation-check");
+
+  checks.forEach(function(chk){
+    chk.checked = master.checked;
+  });
+}
+
+function selectTomorrowReservations(){
+  clearReservationChecks();
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const yyyy = tomorrow.getFullYear();
+  const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const dd = String(tomorrow.getDate()).padStart(2, "0");
+  const target = `${yyyy}-${mm}-${dd}`;
+
+  document.querySelectorAll(".reservation-check").forEach(function(chk){
+    const item = reservationData.find(function(r){
+      return r.reservationNo === chk.value;
+    });
+
+    if(item && item.reserveDate === target){
+      chk.checked = true;
+    }
+  });
+}
+function openCustomerManager() {
+  const crmUrl = "https://script.google.com/macros/s/AKfycbwtdrbpH27bTaJ3QVGXRaOPgUVFj9dUa2iis4KF8K7RKyhojwpaRbFutXXxmg7MMsuxGQ/exec?page=customer-manager";
+  window.open(crmUrl, "_blank");
+}
+
+
+  </script>

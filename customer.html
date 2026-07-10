@@ -1,0 +1,51 @@
+<section class="panel" id="customerSection">
+
+  <div class="panel-title">
+    <h2>고객관리</h2>
+    <span class="badge gray" id="customerCount">0명</span>
+  </div>
+
+  <div class="search-box">
+    <div class="search-wrap">
+      <span>🔍</span>
+      <input
+        id="customerSearch"
+        placeholder="고객명 / 전화번호 검색"
+        oninput="renderCustomerTable()">
+    </div>
+
+    <button class="btn btn-light" onclick="loadCustomers()">
+      새로고침
+    </button>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="reservation-table">
+
+      <thead>
+        <tr>
+          <th>고객명</th>
+          <th>전화번호</th>
+          <th>첫예약일</th>
+          <th>최근예약일</th>
+          <th>예약횟수</th>
+          <th>취소횟수</th>
+          <th>노쇼횟수</th>
+          <th>등급</th>
+          <th>관리</th>
+        </tr>
+      </thead>
+
+      <tbody id="customerTableBody">
+        <tr>
+          <td colspan="9"
+              style="padding:30px;text-align:center;color:#888;">
+            고객 정보를 불러오는 중입니다.
+          </td>
+        </tr>
+      </tbody>
+
+    </table>
+  </div>
+
+</section>

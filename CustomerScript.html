@@ -1,0 +1,224 @@
+<script>
+let customerData = [];
+
+function openCustomerSection(){
+  const section = document.getElementById("customerSection");
+
+  if(!section){
+    alert("고객관리 화면을 찾을 수 없습니다.");
+    return;
+  }
+
+  section.scrollIntoView({behavior:"smooth", block:"start"});
+  loadCustomers();
+}
+
+function loadCustomers(){
+  google.script.run
+    .withSuccessHandler(function(list){      
+      customerData = list || [];
+      renderCustomerTable();
+    })
+    .withFailureHandler(function(err){
+      alert("고객정보 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getCustomerListApi();
+}
+
+function renderCustomerTable(){
+  const tbody = document.getElementById("customerTableBody");
+  if(!tbody) return;
+
+  const q = (document.getElementById("customerSearch")?.value || "")
+    .trim()
+    .toLowerCase();
+
+  const list = customerData.filter(function(c){
+    return [
+      c.customerName,
+      c.phone,
+      c.grade
+    ].join(" ").toLowerCase().includes(q);
+  });
+
+  document.getElementById("customerCount").textContent = list.length + "명";
+
+  if(!list.length){
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="padding:30px;text-align:center;color:#78909c;">
+          고객 정보가 없습니다.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map(function(c){
+    return `
+      <tr>
+        <td class="left"><b>${escapeHtml(c.customerName)}</b></td>
+        <td>${escapeHtml(c.phone)}</td>
+        <td>${escapeHtml(c.firstVisit)}</td>
+        <td>${escapeHtml(c.recentVisit)}</td>
+        <td><b>${escapeHtml(c.visitCount)}</b>회</td>
+        <td>${escapeHtml(c.cancelCount)}회</td>
+        <td>${escapeHtml(c.noShowCount)}회</td>
+        <td>${customerGradeBadge(c.grade, c.noShowCount)}</td>
+        <td>
+          <button class="btn btn-light"
+                  onclick="showCustomerDetail('${escapeAttr(c.phone)}')">
+            상세
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function customerGradeBadge(grade, noShowCount){
+  const g = String(grade || "-");
+  let cls = "gray";
+
+  if(g.includes("VVIP")) cls = "vip";
+  else if(g.includes("VIP")) cls = "vip";
+  else if(g.includes("일반")) cls = "ok";
+  else if(g.includes("신규")) cls = "wait";
+
+  const warn = Number(noShowCount || 0) > 0 ? " ⚠️" : "";
+
+  return `<span class="badge ${cls}">${escapeHtml(g)}${warn}</span>`;
+}
+
+function showCustomerDetail(phone){
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert((res && res.message) ? res.message : "고객 상세정보를 불러오지 못했습니다.");
+        return;
+      }
+
+      renderCustomerDetailModal(res.customer, res.reservations || [], res.histories || []);
+      document.getElementById("customerDetailModalBg").style.display = "flex";
+    })
+    .withFailureHandler(function(err){
+      alert("고객 상세 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getCustomerDetailApi(phone);
+}
+
+function renderCustomerDetailModal(customer, reservations, histories){
+  const box = document.getElementById("customerDetailBox");
+  if(!box) return;
+
+  box.innerHTML = `
+    <div class="message-preview">
+      <b>고객명</b> : ${escapeHtml(customer.customerName)}<br>
+      <b>전화번호</b> : ${escapeHtml(customer.phone)}<br>
+      <b>고객등급</b> : ${customerGradeBadge(customer.grade, customer.noShowCount)}<br>
+      <b>예약횟수</b> : ${escapeHtml(customer.visitCount)}회<br>
+      <b>취소횟수</b> : ${escapeHtml(customer.cancelCount)}회<br>
+      <b>노쇼횟수</b> : ${escapeHtml(customer.noShowCount)}회<br>
+      <b>첫예약일</b> : ${escapeHtml(customer.firstVisit)}<br>
+      <b>최근예약일</b> : ${escapeHtml(customer.recentVisit)}<br>
+      <br>
+
+      <label>고객 메모</label>
+      <textarea id="customerMemoInput">${escapeHtml(customer.memo || "")}</textarea>
+
+      <div class="modal-actions">
+        <button class="btn btn-gold" onclick="saveCustomerMemo('${escapeAttr(customer.phone)}')">
+          메모 저장
+        </button>
+      </div>
+    </div>
+
+    <br>
+
+    <div class="message-preview">
+      <b>예약이력</b><br><br>
+      ${renderCustomerReservations(reservations)}
+    </div>
+
+    <br>
+
+    <div class="message-preview">
+      <b>작업이력</b><br><br>
+      ${renderCustomerHistories(histories)}
+    </div>
+  `;
+}
+
+function renderCustomerReservations(list){
+  if(!list.length) return "예약이력이 없습니다.";
+
+  return list.map(function(r){
+    return `
+      <div style="border-bottom:1px dashed #ddcfb5;padding:8px 0;">
+        <b>${escapeHtml(r.reserveDate)} ${escapeHtml(r.reserveTime)}</b>
+        · ${escapeHtml(r.reserveStatus)}
+        <br>
+        ${escapeHtml(r.people)}명 · ${escapeHtml(r.seat)} · ${escapeHtml(r.menu)}
+        <br>
+        <span style="color:#78909c;">${escapeHtml(r.reservationNo)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderCustomerHistories(list){
+  if(!list.length) return "작업이력이 없습니다.";
+
+  return list.map(function(h){
+    return `
+      <div style="border-bottom:1px dashed #ddcfb5;padding:8px 0;">
+        <b>${escapeHtml(h.loggedAt)}</b>
+        · ${escapeHtml(h.action)}
+        <br>
+        ${escapeHtml(h.field)}
+        ${h.before || h.after ? " : " + escapeHtml(h.before) + " → " + escapeHtml(h.after) : ""}
+        <br>
+        <span style="color:#78909c;">담당: ${escapeHtml(h.staff)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function saveCustomerMemo(phone){
+  const memo = document.getElementById("customerMemoInput")?.value || "";
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert((res && res.message) ? res.message : "메모 저장 실패");
+        return;
+      }
+
+      alert(res.message || "메모가 저장되었습니다.");
+      loadCustomers();
+    })
+    .withFailureHandler(function(err){
+      alert("메모 저장 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .saveCustomerMemoApi(phone, memo);
+}
+
+function closeCustomerDetailModal(){
+  document.getElementById("customerDetailModalBg").style.display = "none";
+}
+
+function escapeAttr(value){
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+  if(document.getElementById("customerSection")){
+    loadCustomers();
+  }
+});
+</script>

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+
+  <title>한국의집 문자관리</title>
+
+  <?!= include('style'); ?>
+</head>
+
+<body>
+
+<div class="crm-page">
+
+  <div class="hero">
+    <div class="hero-row">
+      <div>
+        <h1>한국의집 문자관리</h1>
+        <p>
+          예약고객 검색 · 선택 문자발송 · 발송내역 조회 · 템플릿 설정을
+          한 화면에서 관리합니다.
+        </p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 예약고객 검색 및 문자발송 -->
+  <section class="panel">
+
+    <div class="panel-title">
+      <h2>예약고객 검색 및 문자발송</h2>
+
+      <button
+        class="btn btn-light"
+        onclick="loadReservationSmsTargets(true)">
+        예약목록 새로고침
+      </button>
+    </div>
+
+    <div class="form-grid">
+
+      <div>
+        <label>예약일</label>
+        <input
+          type="date"
+          id="targetReserveDate"
+          class="input">
+      </div>
+
+      <div>
+        <label>고객명</label>
+        <input
+          type="text"
+          id="targetCustomerName"
+          class="input"
+          placeholder="고객명">
+      </div>
+
+      <div>
+        <label>전화번호</label>
+        <input
+          type="text"
+          id="targetPhone"
+          class="input"
+          placeholder="010">
+      </div>
+
+      <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
+
+        <button
+          class="btn btn-light"
+          onclick="showTodaySmsTargets()">
+          오늘 고객
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="showTomorrowSmsTargets()">
+          내일 고객
+        </button>
+
+        <button
+          class="btn btn-gold"
+          onclick="searchReservationSmsTargets()">
+          검색
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="clearReservationSmsSearch()">
+          초기화
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;margin-bottom:8px;">
+      <span
+        id="reservationSmsResultCount"
+        class="badge gray">
+        검색결과 0건
+      </span>
+    </div>
+
+
+    <div style="overflow:auto;max-height:450px;border:1px solid #eee0c8;border-radius:16px;">
+
+      <table class="reservation-table">
+
+        <thead>
+          <tr>
+            <th style="width:42px;">
+              <input
+                type="checkbox"
+                id="targetCheckAll"
+                onclick="toggleAllReservationSmsTargets()">
+            </th>
+
+            <th>예약일</th>
+            <th>시간</th>
+            <th>고객명</th>
+            <th>전화번호</th>
+            <th>인원</th>
+            <th>좌석</th>
+            <th>입금</th>
+            <th>예약상태</th>
+          </tr>
+        </thead>
+
+        <tbody id="reservationSmsTargetBody">
+          <tr>
+            <td
+              colspan="9"
+              style="padding:30px;text-align:center;color:#78909c;">
+              검색 조건을 입력하거나 오늘 고객·내일 고객 버튼을 눌러주세요.
+            </td>
+          </tr>
+        </tbody>
+
+      </table>
+
+    </div>
+
+
+    <div style="margin-top:20px;">
+
+      <label>문자 템플릿 선택</label>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+
+        <button
+          class="btn btn-light"
+          onclick="selectSendTemplate('deposit')">
+          예약접수
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="selectSendTemplate('confirm')">
+          예약확정
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="selectSendTemplate('tomorrow')">
+          내일예약
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="selectSendTemplate('thanks')">
+          방문감사
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="selectSendTemplate('cancel')">
+          예약취소
+        </button>
+
+        <button
+          class="btn btn-light"
+          onclick="selectSendTemplate('noshow')">
+          노쇼안내
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div style="margin-top:18px;">
+
+      <label>발송 미리보기</label>
+
+      <textarea
+        id="sendPreviewText"
+        class="input"
+        style="height:240px;line-height:1.75;"
+        placeholder="고객을 선택하고 문자 템플릿을 눌러주세요."></textarea>
+
+    </div>
+
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;">
+
+      <span
+        id="selectedTargetCount"
+        class="badge gray">
+        선택 0명
+      </span>
+
+      <button
+        class="btn btn-gold"
+        onclick="sendSelectedReservationSms()">
+        선택 고객 문자발송
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- 발송내역 검색 -->
+  <section class="panel">
+
+    <div class="panel-title">
+      <h2>발송내역 검색</h2>
+
+      <button
+        class="btn btn-light"
+        onclick="loadSmsHistory()">
+        조회
+      </button>
+    </div>
+
+    <div class="form-grid">
+
+      <div>
+        <label>시작일</label>
+        <input
+          type="date"
+          id="smsStartDate"
+          class="input">
+      </div>
+
+      <div>
+        <label>종료일</label>
+        <input
+          type="date"
+          id="smsEndDate"
+          class="input">
+      </div>
+
+      <div>
+        <label>고객명</label>
+        <input
+          type="text"
+          id="smsCustomerName"
+          class="input"
+          placeholder="고객명">
+      </div>
+
+      <div>
+        <label>전화번호</label>
+        <input
+          type="text"
+          id="smsPhone"
+          class="input"
+          placeholder="010">
+      </div>
+
+      <div>
+        <label>문자종류</label>
+
+        <select
+          id="smsType"
+          class="input">
+
+          <option value="">전체</option>
+          <option value="예약금안내">예약금 안내</option>
+          <option value="예약접수">예약접수</option>
+          <option value="예약확정">예약확정</option>
+          <option value="내일예약">내일 예약</option>
+          <option value="방문감사">방문 감사</option>
+          <option value="예약취소">예약취소</option>
+          <option value="노쇼안내">노쇼안내</option>
+          <option value="직접작성">직접 작성</option>
+
+        </select>
+      </div>
+
+      <div>
+        <label>발송결과</label>
+
+        <select
+          id="smsResult"
+          class="input">
+
+          <option value="">전체</option>
+          <option value="성공">성공</option>
+          <option value="실패">실패</option>
+
+        </select>
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- 발송 통계 -->
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-label">전체 발송</div>
+      <div
+        class="card-num"
+        id="smsTotalCount">
+        0건
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">오늘 발송</div>
+      <div
+        class="card-num"
+        id="smsTodayCount">
+        0건
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">성공</div>
+      <div
+        class="card-num"
+        id="smsSuccessCount">
+        0건
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">실패</div>
+      <div
+        class="card-num"
+        id="smsFailCount">
+        0건
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- 문자 발송내역 -->
+  <section class="panel">
+
+    <div class="panel-title">
+      <h2>문자 발송내역</h2>
+
+      <div>
+
+        <span
+          id="smsListCount"
+          class="badge gray">
+          0건
+        </span>
+
+        <button
+          class="btn btn-light"
+          onclick="downloadSmsCsv()">
+          엑셀 다운로드
+        </button>
+
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+
+      <table class="reservation-table">
+
+        <thead>
+          <tr>
+            <th>발송일시</th>
+            <th>예약번호</th>
+            <th>고객명</th>
+            <th>전화번호</th>
+            <th>문자종류</th>
+            <th>발송결과</th>
+            <th>재발송</th>
+            <th>내용</th>
+          </tr>
+        </thead>
+
+        <tbody id="smsHistoryBody">
+
+          <tr>
+            <td
+              colspan="8"
+              style="padding:30px;text-align:center;color:#78909c;">
+              문자 발송내역을 불러오는 중입니다.
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </section>
+
+
+  <!-- 문자 템플릿 설정 -->
+  <section class="panel">
+
+    <div class="panel-title">
+      <h2>문자 템플릿 설정</h2>
+
+      <span class="badge gray">
+        SmsTemplates 시트 연동
+      </span>
+    </div>
+
+    <div class="form-grid">
+
+      <div>
+
+        <label>템플릿 선택</label>
+
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+
+          <button
+            class="btn btn-light"
+            onclick="loadSmsTemplate('deposit')">
+            예약접수
+          </button>
+
+          <button
+            class="btn btn-light"
+            onclick="loadSmsTemplate('confirm')">
+            예약확정
+          </button>
+
+          <button
+            class="btn btn-light"
+            onclick="loadSmsTemplate('tomorrow')">
+            내일예약
+          </button>
+
+          <button
+            class="btn btn-light"
+            onclick="loadSmsTemplate('thanks')">
+            방문감사
+          </button>
+
+          <button
+            class="btn btn-light"
+            onclick="loadSmsTemplate('cancel')">
+            예약취소
+          </button>
+
+          <button
+            class="btn btn-light"
+            onclick="loadSmsTemplate('noshow')">
+            노쇼안내
+          </button>
+
+        </div>
+
+      </div>
+
+      <div>
+
+        <label>TemplateID</label>
+
+        <input
+          type="text"
+          id="templateId"
+          class="input"
+          readonly>
+
+        <label style="margin-top:14px;">
+          제목
+        </label>
+
+        <input
+          type="text"
+          id="templateTitle"
+          class="input">
+
+        <label style="margin-top:14px;">
+          내용
+        </label>
+
+        <textarea
+          id="templateContent"
+          class="input"
+          style="height:260px;line-height:1.75;"></textarea>
+
+        <div style="display:flex;gap:10px;margin-top:14px;">
+
+          <button
+            class="btn btn-gold"
+            onclick="saveSmsTemplateFromForm()">
+            저장
+          </button>
+
+          <button
+            class="btn btn-light"
+            onclick="previewSmsTemplate()">
+            미리보기
+          </button>
+
+        </div>
+
+      </div>
+
+      <div class="full">
+
+        <label>미리보기</label>
+
+        <div
+          id="templatePreviewBox"
+          class="message-preview">
+          템플릿을 선택한 뒤 미리보기를 눌러주세요.
+        </div>
+
+      </div>
+
+      <div class="full">
+
+        <div class="message-preview">
+          <b>사용 가능한 변수</b><br>
+          {고객명}, {예약일}, {예약시간}, {인원}, {좌석}, {메뉴}
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+</div>
+
+
+<!-- 문자내용 확인 모달 -->
+<div
+  class="modal-bg"
+  id="smsMessageModalBg">
+
+  <div
+    class="modal"
+    style="max-width:700px;">
+
+    <div class="modal-head">
+
+      <h2>문자내용</h2>
+
+      <button
+        class="close-btn"
+        onclick="closeSmsMessageModal()">
+        ×
+      </button>
+
+    </div>
+
+    <div
+      id="smsMessageContent"
+      class="message-preview">
+    </div>
+
+    <div class="modal-actions">
+
+      <button
+        class="btn btn-light"
+        onclick="closeSmsMessageModal()">
+        닫기
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<?!= include('sms-manager-script'); ?>
+
+</body>
+</html>

@@ -1,0 +1,481 @@
+<script>
+let crmCustomers = [];
+let currentCustomerIndex = -1;
+
+
+document.addEventListener("DOMContentLoaded", function () {
+    console.log("CRM Ready");
+
+    loadCustomerList();
+
+    const searchInput = document.getElementById("customerSearch");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", function () {
+            renderCustomerList(this.value);
+        });
+    }
+});
+
+function loadCustomerList() {
+    google.script.run
+        .withSuccessHandler(function (list) {
+            crmCustomers = list || [];
+
+            const countEl = document.getElementById("crmCustomerCount");
+            if (countEl) {
+                countEl.textContent = crmCustomers.length + "명";
+            }
+
+            renderCustomerList();
+        })
+        .withFailureHandler(function (err) {
+            alert("CRM 고객 조회 오류: " + ((err && err.message) ? err.message : err));
+        })
+        .getCustomerListApi();
+}
+
+function renderCustomerList(keyword = "") {
+    const area = document.getElementById("customerListArea");
+    if (!area) return;
+
+    keyword = String(keyword || "").trim();
+
+    const keywordNumber = keyword.replace(/[^0-9]/g, "");
+
+const list = crmCustomers.filter(function(c) {
+    const name = String(c.customerName || "");
+    const phone = String(c.phone || "");
+    const phoneNumber = phone.replace(/[^0-9]/g, "");
+
+    return (
+        name.includes(keyword) ||
+        phone.includes(keyword) ||
+        phoneNumber.includes(keywordNumber)
+    );
+});
+
+    if (!list.length) {
+        area.innerHTML = `
+            <div style="padding:30px;text-align:center;color:#999;">
+                검색 결과가 없습니다.
+            </div>
+        `;
+        return;
+    }
+
+    area.innerHTML = list.map(function(c) {
+        const idx = crmCustomers.indexOf(c);
+        const tag = c.tag || "";
+        let badge = "";
+
+        if (tag === "VIP") {
+            badge = `<span class="crm-tag vip">VIP</span>`;
+        } else if (tag === "단골") {
+            badge = `<span class="crm-tag regular">단골</span>`;
+        } else if (tag === "주의고객") {
+            badge = `<span class="crm-tag warning">주의</span>`;
+        } else if (tag === "블랙리스트") {
+            badge = `<span class="crm-tag black">BLACK</span>`;
+        }
+
+        const visit = Number(c.visitCount || 0);
+
+let visitColor = "#9ca3af";
+
+if (visit >= 20) {
+    visitColor = "#7c3aed";      // 보라
+} else if (visit >= 10) {
+    visitColor = "#ca8a04";      // 골드
+} else if (visit >= 5) {
+    visitColor = "#2563eb";      // 파랑
+} else if (visit >= 1) {
+    visitColor = "#16a34a";      // 초록
+}
+
+return `
+<div class="crm-customer-item" onclick="showCustomer(${idx})">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+
+        <div style="font-size:17px;font-weight:700;">
+            ${c.customerName || "-"}
+        </div>
+
+        ${badge}
+
+    </div>
+
+    <div style="margin-top:5px;color:#555;">
+        ☎ ${c.phone || "-"}
+    </div>
+
+    <div style="
+        margin-top:10px;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        font-size:12px;
+    ">
+
+        <span style="color:#888;">
+            ${c.grade || ""}
+        </span>
+
+        <span style="
+            background:${visitColor};
+            color:#fff;
+            padding:3px 8px;
+            border-radius:20px;
+            font-weight:bold;
+        ">
+            예약 ${visit}회
+        </span>
+
+    </div>
+
+</div>
+`;
+    }).join("");
+
+    if (list.length === 1) {
+        const idx = crmCustomers.indexOf(list[0]);
+        showCustomer(idx);
+    }
+}
+
+function showCustomer(idx) {
+
+    currentCustomerIndex = idx;
+    
+
+    
+
+    const customer = crmCustomers[idx];
+    if (!customer) return;
+
+    const detailArea = document.getElementById("customerDetailArea");
+    if (!detailArea) return;
+
+    detailArea.innerHTML = `
+        <p style="color:#999;">고객 정보를 불러오는 중입니다...</p>
+    `;
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || res.ok === false) {
+                alert((res && res.message) ? res.message : "고객 상세정보를 불러오지 못했습니다.");
+                return;
+            }
+
+            const c = res.customer;
+            const reservations = res.reservations || [];
+
+            let html = `
+
+<div class="crm-summary-card">
+
+    <div class="crm-summary-header">
+        <div>
+            <h2>${c.customerName || "-"}</h2>
+            <div class="crm-phone">${c.phone || "-"}</div>
+        </div>
+
+        <div class="crm-tag-big">
+            ${c.tag || ""}
+        </div>
+    </div>
+
+    <div style="
+    display:flex;
+    gap:10px;
+    margin:18px 0 20px;
+">
+
+    <button
+        class="btn btn-gold"
+        onclick="openReservationFromCRM('${c.customerName}','${c.phone}')">
+
+        📅 예약등록
+
+    </button>
+
+    <button
+         class="btn btn-light"
+           onclick="openCrmSms('${c.customerName}','${c.phone}')">
+          💬 문자발송
+    </button>
+
+    
+
+</div>
+
+    <div class="crm-summary-grid">
+
+        <div>
+            <span>고객등급</span>
+            <strong>${c.grade || "-"}</strong>
+        </div>
+
+        <div>
+            <span>첫 예약</span>
+            <strong>${c.firstVisit || "-"}</strong>
+        </div>
+
+        <div>
+            <span>최근 예약</span>
+            <strong>${c.recentVisit || "-"}</strong>
+        </div>
+
+        <div>
+            <span>예약</span>
+            <strong>${c.visitCount || 0}회</strong>
+        </div>
+
+        <div>
+            <span>취소</span>
+            <strong>${c.cancelCount || 0}회</strong>
+        </div>
+
+        <div>
+            <span>노쇼</span>
+            <strong>${c.noShowCount || 0}회</strong>
+        </div>
+
+    </div>
+
+    <hr>
+
+    <p><b>즐겨찾는 메뉴</b></p>
+    <div>${c.favoriteMenu || "-"}</div>
+
+    <p style="margin-top:15px;"><b>알레르기</b></p>
+    <div>${c.allergy || "-"}</div>
+
+</div>
+
+<hr>
+
+<h3>예약이력</h3>
+`;
+
+            if (!reservations.length) {
+                html += `
+                    <p style="color:#999;">
+                        예약이력이 없습니다.
+                    </p>
+                `;
+            } else {
+                reservations.forEach(function(r) {
+                    let badge = "badge-gray";
+
+                    if (r.reserveStatus === "예약확정") badge = "badge-green";
+                    if (r.reserveStatus === "예약접수") badge = "badge-blue";
+                    if (r.reserveStatus === "예약취소") badge = "badge-red";
+                    if (r.reserveStatus === "노쇼") badge = "badge-black";
+
+                    html += `
+                        <div class="crm-history-card">
+                            <div class="crm-history-top">
+                                <div class="crm-history-date">
+                                    📅 ${r.reserveDate || "-"} ${r.reserveTime || ""}
+                                </div>
+
+                                <div class="${badge}">
+                                    ${r.reserveStatus || "-"}
+                                </div>
+                            </div>
+
+                            <div class="crm-history-body">
+                                <div>👥 <b>${r.people || 0}명</b></div>
+                                <div>🪑 ${r.seat || "-"}</div>
+                                <div>🍱 ${r.menu || "-"}</div>
+                                <div>💰 ${r.deposit || 0}원</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                <hr style="margin:30px 0;">
+
+                <h3>고객 프로필</h3>
+
+                <p><b>고객태그</b></p>
+
+<select id="crmCustomerTag"
+        style="width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;">
+
+    <option value="" ${!c.tag ? "selected" : ""}>선택안함</option>
+
+    <option value="VIP"
+        ${c.tag==="VIP" ? "selected" : ""}>
+        ⭐ VIP
+    </option>
+
+    <option value="단골"
+        ${c.tag==="단골" ? "selected" : ""}>
+        😊 단골
+    </option>
+
+    <option value="주의고객"
+        ${c.tag==="주의고객" ? "selected" : ""}>
+        ⚠️ 주의고객
+    </option>
+
+    <option value="블랙리스트"
+        ${c.tag==="블랙리스트" ? "selected" : ""}>
+        ⛔ 블랙리스트
+    </option>
+
+</select>
+
+                <p><b>즐겨찾는 메뉴</b></p>
+                <input id="crmFavoriteMenu"
+                       value="${c.favoriteMenu || ""}"
+                       style="width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;">
+
+                <p><b>알레르기</b></p>
+                <input id="crmAllergy"
+                       value="${c.allergy || ""}"
+                       style="width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;">
+
+                <br><br>
+
+                <button class="btn btn-gold"
+                        onclick="saveCrmCustomerProfile('${c.phone}')">
+                    프로필 저장
+                </button>
+
+                <hr style="margin:30px 0;">
+
+                <h3>📝 고객메모</h3>
+
+                  <textarea
+                   id="crmCustomerMemo"
+                   class="crm-memo">${c.memo || ""}</textarea>
+
+                <br><br>
+
+                <button class="btn btn-gold crm-memo-btn"
+                        onclick="saveCrmCustomerMemo('${c.phone}')">
+                    메모 저장
+                </button>
+            `;
+
+            detailArea.innerHTML = html;
+        })
+        .withFailureHandler(function(err) {
+            alert("고객 상세 조회 오류: " + ((err && err.message) ? err.message : err));
+        })
+        .getCustomerDetailApi(customer.phone);
+}
+
+function saveCrmCustomerMemo(phone) {
+    const memoEl = document.getElementById("crmCustomerMemo");
+    const memo = memoEl ? memoEl.value : "";
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || res.ok === false) {
+                alert((res && res.message) ? res.message : "메모 저장 실패");
+                return;
+            }
+
+            alert("메모가 저장되었습니다.");
+
+            loadCustomerList();
+
+            setTimeout(function () {
+                showCustomer(currentCustomerIndex);
+            }, 300);
+        })
+        .withFailureHandler(function(err) {
+            alert("메모 저장 오류: " + ((err && err.message) ? err.message : err));
+        })
+        .saveCustomerMemoApi(phone, memo);
+}
+
+function saveCrmCustomerProfile(phone) {
+    const data = {
+        tag: document.getElementById("crmCustomerTag").value.trim(),
+        favoriteMenu: document.getElementById("crmFavoriteMenu").value.trim(),
+        allergy: document.getElementById("crmAllergy").value.trim()
+    };
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || res.ok === false) {
+                alert((res && res.message) ? res.message : "프로필 저장 실패");
+                return;
+            }
+
+            alert("고객 프로필이 저장되었습니다.");
+
+            loadCustomerList();
+
+            setTimeout(function () {
+                showCustomer(currentCustomerIndex);
+            }, 300);
+        })
+        .withFailureHandler(function(err) {
+            alert("프로필 저장 오류: " + ((err && err.message) ? err.message : err));
+        })
+        .saveCustomerProfileApi(phone, data);
+}
+function openReservationFromCRM(name, phone){
+
+  const baseUrl =
+    "https://script.google.com/macros/s/AKfycbztW1jBJBIF9QxsXhJMmXfb24w1bPZCQbIormWPiEyiRIx2stbS3YmUABpbc4PtWnZ8/exec";
+
+  const url =
+    baseUrl +
+    "?customerName=" + encodeURIComponent(name || "") +
+    "&phone=" + encodeURIComponent(phone || "");
+
+  window.open(url, "_blank");
+}
+function openCrmSms(name, phone){
+
+    const msg = prompt(
+`받는사람 : ${name}
+
+보낼 문자를 입력하세요.`,
+`안녕하세요 ${name}님.
+한국의집입니다.
+
+감사합니다.`
+    );
+
+    if(!msg) return;
+
+if (!confirm(
+`받는 사람 : ${name}
+전화번호 : ${phone}
+
+위 내용으로 문자를 발송하시겠습니까?`
+)) {
+    return;
+}
+
+google.script.run
+        .withSuccessHandler(function(res){
+
+            if(res.ok){
+                alert("문자가 발송되었습니다.");
+            }else{
+                alert(res.message);
+            }
+
+        })
+        .withFailureHandler(function(err){
+            alert(err);
+        })
+        .sendCustomerSMS(phone, name, msg);
+
+}
+
+
+
+</script>

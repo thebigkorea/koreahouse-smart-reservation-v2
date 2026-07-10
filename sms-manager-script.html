@@ -1,0 +1,570 @@
+<script>
+let SMS_HISTORY = [];
+let RESERVATION_SMS_ALL = [];
+let RESERVATION_SMS_VIEW = [];
+let CURRENT_TEMPLATE_ID = "deposit";
+let SEND_TEMPLATE_ID = "deposit";
+
+document.addEventListener("DOMContentLoaded", function(){
+  loadSmsTemplate("deposit");  
+  loadReservationSmsTargets(false);
+});
+
+function loadReservationSmsTargets(showResult){
+  google.script.run
+    .withSuccessHandler(function(list){
+      RESERVATION_SMS_ALL = list || [];
+
+      if(showResult){
+        searchReservationSmsTargets();
+      }else{
+        RESERVATION_SMS_VIEW = [];
+        renderReservationSmsTargets(
+          "검색 조건을 입력하거나 오늘 고객·내일 고객 버튼을 눌러주세요."
+        );
+      }
+    })
+    .withFailureHandler(function(err){
+      alert("예약고객 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getReservationList();
+}
+
+function searchReservationSmsTargets(){
+  const reserveDate = document.getElementById("targetReserveDate").value;
+  const customerName = document.getElementById("targetCustomerName").value.trim().toLowerCase();
+  const phone = document.getElementById("targetPhone").value.replace(/[^0-9]/g, "");
+
+  if(!reserveDate && !customerName && !phone){
+    RESERVATION_SMS_VIEW = [];
+    renderReservationSmsTargets("검색 조건을 하나 이상 입력하세요.");
+    return;
+  }
+
+  RESERVATION_SMS_VIEW = RESERVATION_SMS_ALL
+  .filter(function(item){
+
+    // 고객명 또는 전화번호를 입력한 경우
+    // 날짜조건은 적용하지 않는다.
+    if(customerName || phone){
+
+      if(customerName &&
+         !String(item.customerName || "")
+           .toLowerCase()
+           .includes(customerName)){
+        return false;
+      }
+
+      if(phone){
+        const itemPhone = String(item.phone || "")
+          .replace(/[^0-9]/g, "");
+
+        if(!itemPhone.includes(phone)){
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    // 이름/전화번호가 없을 때만 날짜검색
+    if(reserveDate &&
+       String(item.reserveDate || "") !== reserveDate){
+      return false;
+    }
+
+    return true;
+  })
+  .sort(function(a,b){
+    const dateCompare =
+      String(a.reserveDate || "")
+        .localeCompare(String(b.reserveDate || ""));
+
+    if(dateCompare !== 0) return dateCompare;
+
+    return String(a.reserveTime || "")
+      .localeCompare(String(b.reserveTime || ""));
+  });
+
+document.getElementById("targetCheckAll").checked = false;
+renderReservationSmsTargets();
+}
+
+function clearReservationSmsSearch(){
+  document.getElementById("targetReserveDate").value = "";
+  document.getElementById("targetCustomerName").value = "";
+  document.getElementById("targetPhone").value = "";
+  document.getElementById("targetCheckAll").checked = false;
+
+  RESERVATION_SMS_VIEW = [];
+
+  renderReservationSmsTargets(
+    "검색 조건을 입력하거나 오늘 고객·내일 고객 버튼을 눌러주세요."
+  );
+}
+
+function showTodaySmsTargets(){
+  const today = new Date();
+
+  const dateText =
+    today.getFullYear() + "-" +
+    String(today.getMonth() + 1).padStart(2, "0") + "-" +
+    String(today.getDate()).padStart(2, "0");
+
+  document.getElementById("targetReserveDate").value = dateText;
+  document.getElementById("targetCustomerName").value = "";
+  document.getElementById("targetPhone").value = "";
+
+  searchReservationSmsTargets();
+}
+
+function showTomorrowSmsTargets(){
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const dateText =
+    tomorrow.getFullYear() + "-" +
+    String(tomorrow.getMonth() + 1).padStart(2, "0") + "-" +
+    String(tomorrow.getDate()).padStart(2, "0");
+
+  document.getElementById("targetReserveDate").value = dateText;
+  document.getElementById("targetCustomerName").value = "";
+  document.getElementById("targetPhone").value = "";
+
+  searchReservationSmsTargets();
+}
+
+function renderReservationSmsTargets(message){
+  const tbody = document.getElementById("reservationSmsTargetBody");
+  const count = document.getElementById("reservationSmsResultCount");
+
+  if(count){
+    count.textContent = "검색결과 " + RESERVATION_SMS_VIEW.length + "건";
+  }
+
+  if(!RESERVATION_SMS_VIEW.length){
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="padding:30px;text-align:center;color:#78909c;">
+          ${escapeSmsHtml(message || "검색된 예약고객이 없습니다.")}
+        </td>
+      </tr>
+    `;
+
+    updateSelectedTargetCount();
+    return;
+  }
+
+  tbody.innerHTML = RESERVATION_SMS_VIEW.map(function(item){
+    return `
+      <tr>
+        <td>
+          <input type="checkbox"
+                 class="reservation-sms-check"
+                 value="${escapeSmsHtml(item.reservationNo)}"
+                 onchange="updateSelectedTargetCount();previewSelectedSendTemplate();">
+        </td>
+        <td>${escapeSmsHtml(item.reserveDate)}</td>
+        <td><b>${escapeSmsHtml(item.reserveTime)}</b></td>
+        <td><b>${escapeSmsHtml(item.customerName)}</b></td>
+        <td>${escapeSmsHtml(item.phone)}</td>
+        <td>${escapeSmsHtml(item.people)}명</td>
+        <td>${escapeSmsHtml(item.seat)}</td>
+        <td>${escapeSmsHtml(item.depositStatus)}</td>
+        <td>${escapeSmsHtml(item.reserveStatus)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  updateSelectedTargetCount();
+}
+
+function toggleAllReservationSmsTargets(){
+  const checked = document.getElementById("targetCheckAll").checked;
+
+  document.querySelectorAll(".reservation-sms-check").forEach(function(chk){
+    chk.checked = checked;
+  });
+
+  updateSelectedTargetCount();
+  previewSelectedSendTemplate();
+}
+
+function getSelectedReservationSmsTargets(){
+  const selectedNos = Array.from(
+    document.querySelectorAll(".reservation-sms-check:checked")
+  ).map(function(chk){
+    return String(chk.value);
+  });
+
+  return RESERVATION_SMS_ALL.filter(function(item){
+    return selectedNos.includes(String(item.reservationNo));
+  });
+}
+
+function updateSelectedTargetCount(){
+  const count = document.querySelectorAll(".reservation-sms-check:checked").length;
+  document.getElementById("selectedTargetCount").textContent = "선택 " + count + "명";
+}
+
+function selectSendTemplate(templateId){
+  SEND_TEMPLATE_ID = templateId;
+  previewSelectedSendTemplate();
+}
+
+function previewSelectedSendTemplate(){
+  const list = getSelectedReservationSmsTargets();
+  const textarea = document.getElementById("sendPreviewText");
+
+  if(!list.length){
+    textarea.value = "";
+    return;
+  }
+
+  textarea.value = "문자 미리보기를 불러오는 중입니다...";
+
+  google.script.run
+    .withSuccessHandler(function(message){
+      textarea.value = message || "";
+    })
+    .withFailureHandler(function(err){
+      textarea.value = "";
+      alert("문자 미리보기 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .renderSmsTemplate(SEND_TEMPLATE_ID, list[0]);
+}
+
+function sendSelectedReservationSms(){
+  const list = getSelectedReservationSmsTargets();
+
+  if(!list.length){
+    alert("문자를 발송할 고객을 선택하세요.");
+    return;
+  }
+
+  if(!confirm(list.length + "명에게 문자를 발송하시겠습니까?")){
+    return;
+  }
+
+  sendReservationSmsNext(list, 0, 0);
+}
+
+function sendReservationSmsNext(list, index, successCount){
+  if(index >= list.length){
+    alert(
+      "문자 발송 완료\n" +
+      "전체 " + list.length + "명 / 성공 " + successCount + "명"
+    );
+
+    loadSmsHistory();
+    return;
+  }
+
+  const item = list[index];
+
+  google.script.run
+    .withSuccessHandler(function(message){
+      if(!message){
+        alert(item.customerName + " 고객의 문자내용을 만들 수 없습니다.");
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(res){
+          const ok = !!(res && res.ok);
+
+          if(!ok){
+            alert(
+              item.customerName + " 고객 문자 발송 실패: " +
+              ((res && res.message) ? res.message : "알 수 없는 오류")
+            );
+          }
+
+          sendReservationSmsNext(
+            list,
+            index + 1,
+            successCount + (ok ? 1 : 0)
+          );
+        })
+        .withFailureHandler(function(err){
+          alert(
+            item.customerName + " 고객 문자 발송 오류: " +
+            ((err && err.message) ? err.message : err)
+          );
+        })
+        .sendCustomerSMS(
+          item.phone,
+          item.customerName,
+          message,
+          item.reservationNo
+        );
+    })
+    .withFailureHandler(function(err){
+      alert("템플릿 생성 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .renderSmsTemplate(SEND_TEMPLATE_ID, item);
+}
+
+function getSmsFilters(){
+  return {
+    startDate: document.getElementById("smsStartDate").value,
+    endDate: document.getElementById("smsEndDate").value,
+    customerName: document.getElementById("smsCustomerName").value.trim(),
+    phone: document.getElementById("smsPhone").value.trim(),
+    smsType: document.getElementById("smsType").value,
+    result: document.getElementById("smsResult").value
+  };
+}
+
+function loadSmsHistory(){
+  const filters = getSmsFilters();
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      SMS_HISTORY = (res && res.list) ? res.list : [];
+      renderSmsHistory(SMS_HISTORY);
+      renderSmsStats(res && res.stats ? res.stats : {});
+    })
+    .withFailureHandler(function(err){
+      alert("문자내역 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getSmsHistoryApi(filters);
+}
+
+function renderSmsStats(stats){
+  document.getElementById("smsTotalCount").textContent = (stats.total || 0) + "건";
+  document.getElementById("smsTodayCount").textContent = (stats.today || 0) + "건";
+  document.getElementById("smsSuccessCount").textContent = (stats.success || 0) + "건";
+  document.getElementById("smsFailCount").textContent = (stats.fail || 0) + "건";
+}
+
+function renderSmsHistory(list){
+  const tbody = document.getElementById("smsHistoryBody");
+  const count = document.getElementById("smsListCount");
+
+  count.textContent = list.length + "건";
+
+  if(!list.length){
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="padding:30px;text-align:center;color:#78909c;">
+          조회된 문자 발송내역이 없습니다.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map(function(item, index){
+    const resultClass = String(item.result || "").includes("성공") ? "ok" : "wait";
+
+    return `
+      <tr>
+        <td>${escapeSmsHtml(item.sentAt)}</td>
+        <td>${escapeSmsHtml(item.reservationNo)}</td>
+        <td><b>${escapeSmsHtml(item.customerName)}</b></td>
+        <td>${escapeSmsHtml(item.phone)}</td>
+        <td>${escapeSmsHtml(item.smsType)}</td>
+        <td><span class="badge ${resultClass}">${escapeSmsHtml(item.result)}</span></td>
+        <td>
+          <button class="btn btn-light" onclick="resendSms(${item.rowNo})">
+            재발송 ${escapeSmsHtml(item.resendCount || 0)}
+          </button>
+        </td>
+        <td>
+          <button class="btn btn-yellow" onclick="openSmsMessageModal(${index})">
+            보기
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openSmsMessageModal(index){
+  const item = SMS_HISTORY[index];
+
+  if(!item){
+    alert("문자내용을 찾을 수 없습니다.");
+    return;
+  }
+
+  document.getElementById("smsMessageContent").innerHTML = `
+    <div style="line-height:1.8;font-weight:800;">
+      <b>고객명</b> : ${escapeSmsHtml(item.customerName)}<br>
+      <b>전화번호</b> : ${escapeSmsHtml(item.phone)}<br>
+      <b>문자종류</b> : ${escapeSmsHtml(item.smsType)}<br>
+      <b>발송결과</b> : ${escapeSmsHtml(item.result)}<br>
+      <hr style="border:0;border-top:1px solid #eee0c8;margin:16px 0;">
+      <pre style="white-space:pre-wrap;font-family:inherit;margin:0;">${escapeSmsHtml(item.message)}</pre>
+    </div>
+  `;
+
+  document.getElementById("smsMessageModalBg").style.display = "flex";
+}
+
+function closeSmsMessageModal(){
+  document.getElementById("smsMessageModalBg").style.display = "none";
+}
+
+function resendSms(rowNo){
+  if(!confirm("이 문자를 재발송하시겠습니까?")){
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert((res && res.message) ? res.message : "재발송 실패");
+        return;
+      }
+
+      alert(res.message || "재발송 완료");
+      loadSmsHistory();
+    })
+    .withFailureHandler(function(err){
+      alert("재발송 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .resendSmsApi(rowNo);
+}
+
+function downloadSmsCsv(){
+  if(!SMS_HISTORY.length){
+    alert("다운로드할 문자내역이 없습니다.");
+    return;
+  }
+
+  const headers = [
+    "발송일시",
+    "예약번호",
+    "고객명",
+    "전화번호",
+    "문자종류",
+    "문자내용",
+    "발송자",
+    "발송결과",
+    "Solapi Message ID",
+    "재발송횟수"
+  ];
+
+  const rows = SMS_HISTORY.map(function(x){
+    return [
+      x.sentAt,
+      x.reservationNo,
+      x.customerName,
+      x.phone,
+      x.smsType,
+      x.message,
+      x.sender,
+      x.result,
+      x.messageId,
+      x.resendCount
+    ];
+  });
+
+  const csv = [headers].concat(rows)
+    .map(function(row){
+      return row.map(function(v){
+        return '"' + String(v || "").replace(/"/g, '""') + '"';
+      }).join(",");
+    })
+    .join("\n");
+
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: "text/csv;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "SMSHistory.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function escapeSmsHtml(value){
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function loadSmsTemplate(templateId){
+  CURRENT_TEMPLATE_ID = templateId;
+
+  google.script.run
+    .withSuccessHandler(function(t){
+      if(!t){
+        alert("템플릿을 찾을 수 없습니다.");
+        return;
+      }
+
+      document.getElementById("templateId").value = t.templateId;
+      document.getElementById("templateTitle").value = t.title || "";
+      document.getElementById("templateContent").value =
+        String(t.content || "").replaceAll("\\n", "\n");
+    })
+    .withFailureHandler(function(err){
+      alert("템플릿 조회 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .getSmsTemplate(templateId);
+}
+
+function saveSmsTemplateFromForm(){
+  const data = {
+    templateId: document.getElementById("templateId").value,
+    title: document.getElementById("templateTitle").value.trim(),
+    content: document.getElementById("templateContent").value.trim()
+  };
+
+  if(!data.templateId || !data.title || !data.content){
+    alert("제목과 내용을 입력하세요.");
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res || res.ok === false){
+        alert("저장 실패");
+        return;
+      }
+
+      alert("템플릿이 저장되었습니다.");
+    })
+    .withFailureHandler(function(err){
+      alert("템플릿 저장 오류: " + ((err && err.message) ? err.message : err));
+    })
+    .saveSmsTemplate(data);
+}
+
+function previewSmsTemplate(){
+  const titleEl = document.getElementById("templateTitle");
+  const contentEl = document.getElementById("templateContent");
+  const previewEl = document.getElementById("templatePreviewBox");
+
+  if(!titleEl || !contentEl || !previewEl){
+    alert("미리보기 영역 ID를 찾을 수 없습니다.");
+    return;
+  }
+
+  const title = titleEl.value.trim();
+  let text = contentEl.value || "";
+
+  text = text.replaceAll("{고객명}", "홍길동");
+  text = text.replaceAll("{예약일}", "2026-07-09");
+  text = text.replaceAll("{예약시간}", "18:00");
+  text = text.replaceAll("{인원}", "4명");
+  text = text.replaceAll("{좌석}", "청우정");
+  text = text.replaceAll("{메뉴}", "청우정식");
+
+  previewEl.innerHTML = `
+    <b>[${escapeSmsHtml(title)}]</b>
+    <hr style="border:0;border-top:1px solid #eee0c8;margin:12px 0;">
+    <pre style="white-space:pre-wrap;font-family:inherit;line-height:1.8;margin:0;">${escapeSmsHtml(text)}</pre>
+  `;
+}
+</script>
