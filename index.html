@@ -571,6 +571,59 @@
              placeholder="고객명 / 전화번호 / 예약번호 / 날짜 / 좌석 / 담당자 검색"
              oninput="renderReservationTable()">
     </div>
+   
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+  <input
+    type="date"
+    id="reservationStartDate"
+    onchange="renderReservationTable()"
+    style="width:160px;">
+
+  <span style="font-weight:900;color:#60747d;">~</span>
+
+  <input
+    type="date"
+    id="reservationEndDate"
+    onchange="renderReservationTable()"
+    style="width:160px;">
+
+  <button
+  class="btn btn-light"
+  onclick="setReservationDateQuickFilter('today')">
+  오늘
+</button>
+
+<button
+  class="btn btn-light"
+  onclick="setReservationDateQuickFilter('tomorrow')">
+  내일
+</button>
+
+<button
+  class="btn btn-light"
+  onclick="setReservationDateQuickFilter('week')">
+  이번 주
+</button>
+
+<button
+  class="btn btn-light"
+  onclick="setReservationDateQuickFilter('month')">
+  이번 달
+</button>  
+
+  <button
+    class="btn btn-light"
+    onclick="clearReservationDateFilter()">
+    기간 초기화
+  </button>
+
+  <button
+    class="btn btn-gold"
+    onclick="printFilteredReservations()">
+    인쇄
+  </button>
+</div>
+
     <button class="btn btn-light" onclick="loadReservations()">새로고침</button>
 
      <button class="btn btn-light" onclick="selectTomorrowReservations()">
@@ -1242,10 +1295,22 @@ function loadReservations(){
 }
 
 function renderReservationTable(){
-  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+
+  const q = document.getElementById("searchInput")
+    .value
+    .trim()
+    .toLowerCase();
+
+  const startDate =
+    document.getElementById("reservationStartDate")?.value || "";
+
+  const endDate =
+    document.getElementById("reservationEndDate")?.value || "";
+
   const tbody = document.getElementById("reservationTableBody");
 
   const list = reservationData.filter(function(r){
+
     const text = [
       r.reservationNo,
       r.reserveDate,
@@ -1260,13 +1325,33 @@ function renderReservationTable(){
       r.staff
     ].join(" ").toLowerCase();
 
-    return text.includes(q);
+    if(!text.includes(q)){
+      return false;
+    }
+
+    const reserveDate = String(r.reserveDate || "");
+
+    if(startDate && reserveDate < startDate){
+      return false;
+    }
+
+    if(endDate && reserveDate > endDate){
+      return false;
+    }
+
+    return true;
   });
 
-  document.getElementById("reservationCount").textContent = list.length + "건";
+  const totalPeople = list.reduce(function(sum, r){
+  return sum + Number(r.people || 0);
+}, 0);
+
+document.getElementById("reservationCount").textContent =
+    list.length + "건 · " + totalPeople + "명";
 
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:#78909c;">예약 내역이 없습니다.</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="12" style="padding:30px;text-align:center;color:#78909c;">예약 내역이 없습니다.</td></tr>';
     return;
   }
 
@@ -1285,22 +1370,344 @@ function renderReservationTable(){
         <td>${escapeHtml(r.people)}명</td>
         <td>${escapeHtml(r.seat)}</td>
         <td class="left">${escapeHtml(r.menu)}</td>
-        <td>${badgeText(r.depositStatus)}</td>
+        <td>
+  ${Number(r.deposit || 0) > 0
+    ? badgeText(r.depositStatus)
+    : "-"}
+</td>
         <td>${badgeText(r.reserveStatus)}</td>
         <td>${escapeHtml(r.staff)}</td>
         <td>
           <div class="table-actions">
             <button class="btn btn-light"
-            onclick="showReservationDetailByInfo('${escapeHtml(r.reserveDate)}','${escapeHtml(r.reserveTime)}','${escapeHtml(r.customerName)}')">상세</button>
-            <button class="btn btn-light" onclick="openEditReservation('${r.reservationNo}')">수정</button>
-            <button class="btn btn-green" onclick="markDepositDone('${r.reservationNo}')">입금</button>
-            <button class="btn btn-light" onclick="confirmReservation('${r.reservationNo}')">확정</button>
-            <button class="btn btn-yellow" onclick="openMessageModal('${r.reservationNo}')">문자</button>
+              onclick="showReservationDetailByInfo('${escapeHtml(r.reserveDate)}','${escapeHtml(r.reserveTime)}','${escapeHtml(r.customerName)}')">
+              상세
+            </button>
+
+            <button class="btn btn-light"
+              onclick="openEditReservation('${r.reservationNo}')">
+              수정
+            </button>
+
+            <button class="btn btn-green"
+              onclick="markDepositDone('${r.reservationNo}')">
+              입금
+            </button>
+
+            <button class="btn btn-light"
+              onclick="confirmReservation('${r.reservationNo}')">
+              확정
+            </button>
+
+            <button class="btn btn-yellow"
+              onclick="openMessageModal('${r.reservationNo}')">
+              문자
+            </button>
           </div>
         </td>
       </tr>
     `;
   }).join("");
+}
+
+function clearReservationDateFilter(){
+  const start = document.getElementById("reservationStartDate");
+  const end = document.getElementById("reservationEndDate");
+
+  if(start) start.value = "";
+  if(end) end.value = "";
+
+  renderReservationTable();
+}
+
+function setReservationDateQuickFilter(type){
+  const startInput =
+    document.getElementById("reservationStartDate");
+
+  const endInput =
+    document.getElementById("reservationEndDate");
+
+  if(!startInput || !endInput) return;
+
+  const today = new Date();
+
+  function formatDate(date){
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  let startDate = new Date(today);
+  let endDate = new Date(today);
+
+  if(type === "tomorrow"){
+    startDate.setDate(startDate.getDate() + 1);
+    endDate = new Date(startDate);
+  }
+
+  if(type === "week"){
+    const day = today.getDay();
+
+    const mondayOffset =
+      day === 0 ? -6 : 1 - day;
+
+    startDate.setDate(today.getDate() + mondayOffset);
+
+    endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+  }
+
+  if(type === "month"){
+    startDate =
+      new Date(today.getFullYear(), today.getMonth(), 1);
+
+    endDate =
+      new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  }
+
+  startInput.value = formatDate(startDate);
+  endInput.value = formatDate(endDate);
+
+  renderReservationTable();
+}
+
+function printFilteredReservations(){
+
+  const q = document.getElementById("searchInput")
+    .value
+    .trim()
+    .toLowerCase();
+
+  const startDate =
+    document.getElementById("reservationStartDate")?.value || "";
+
+  const endDate =
+    document.getElementById("reservationEndDate")?.value || "";
+
+  const list = reservationData
+    .filter(function(r){
+
+      const text = [
+        r.reservationNo,
+        r.reserveDate,
+        r.reserveTime,
+        r.customerName,
+        r.phone,
+        r.people,
+        r.seat,
+        r.menu,
+        r.depositStatus,
+        r.reserveStatus,
+        r.staff
+      ].join(" ").toLowerCase();
+
+      if(!text.includes(q)){
+        return false;
+      }
+
+      const reserveDate = String(r.reserveDate || "");
+
+      if(startDate && reserveDate < startDate){
+        return false;
+      }
+
+      if(endDate && reserveDate > endDate){
+        return false;
+      }
+
+      return true;
+    })
+    .sort(function(a, b){
+      const dateCompare =
+        String(a.reserveDate || "")
+          .localeCompare(String(b.reserveDate || ""));
+
+      if(dateCompare !== 0){
+        return dateCompare;
+      }
+
+      return String(a.reserveTime || "")
+        .localeCompare(String(b.reserveTime || ""));
+    });
+
+  if(!list.length){
+    alert("인쇄할 예약내역이 없습니다.");
+    return;
+  }
+
+  const totalPeople = list.reduce(function(sum, r){
+    return sum + Number(r.people || 0);
+  }, 0);
+
+  const periodText =
+    startDate || endDate
+      ? (startDate || "처음") + " ~ " + (endDate || "마지막")
+      : "전체 기간";
+
+  const rows = list.map(function(r, index){
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(r.reserveDate || "-")}</td>
+        <td>${escapeHtml(r.reserveTime || "-")}</td>
+        <td>${escapeHtml(r.customerName || "-")}</td>
+        <td>${escapeHtml(r.phone || "-")}</td>
+        <td>${escapeHtml(String(r.people || 0))}명</td>
+        <td>${escapeHtml(r.seat || "-")}</td>
+        <td>${escapeHtml(r.menu || "-")}</td>
+        <td>${escapeHtml(r.depositStatus || "-")}</td>
+        <td>${escapeHtml(r.reserveStatus || "-")}</td>
+        <td>${escapeHtml(r.staff || "-")}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const printWindow = window.open("", "_blank");
+
+  if(!printWindow){
+    alert("팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <title>예약현황 출력</title>
+
+      <style>
+        @page{
+          size:A4 landscape;
+          margin:12mm;
+        }
+
+        *{
+          box-sizing:border-box;
+        }
+
+        body{
+          margin:0;
+          font-family:"Noto Sans KR", Arial, sans-serif;
+          color:#111;
+        }
+
+        h1{
+          margin:0;
+          text-align:center;
+          font-size:24px;
+        }
+
+        h2{
+          margin:5px 0 18px;
+          text-align:center;
+          font-size:18px;
+        }
+
+        .summary{
+          display:flex;
+          justify-content:space-between;
+          gap:15px;
+          margin-bottom:12px;
+          font-size:12px;
+          font-weight:700;
+        }
+
+        table{
+          width:100%;
+          border-collapse:collapse;
+          table-layout:fixed;
+          font-size:10px;
+        }
+
+        th,
+        td{
+          border:1px solid #555;
+          padding:6px 4px;
+          text-align:center;
+          word-break:break-word;
+        }
+
+        th{
+          background:#eee;
+          font-weight:900;
+        }
+
+        td:nth-child(4),
+        td:nth-child(8){
+          text-align:left;
+        }
+
+        .buttons{
+          display:flex;
+          justify-content:center;
+          gap:10px;
+          margin-bottom:16px;
+        }
+
+        button{
+          border:0;
+          border-radius:8px;
+          padding:10px 18px;
+          font-size:14px;
+          font-weight:900;
+          cursor:pointer;
+        }
+
+        @media print{
+          .buttons{
+            display:none;
+          }
+        }
+      </style>
+    </head>
+
+    <body>
+
+      <div class="buttons">
+        <button onclick="window.print()">인쇄</button>
+        <button onclick="window.close()">창 닫기</button>
+      </div>
+
+      <h1>한국의집</h1>
+      <h2>예약현황</h2>
+
+      <div class="summary">
+        <div>조회기간 : ${escapeHtml(periodText)}</div>
+        <div>예약건수 : ${list.length}건</div>
+        <div>총인원 : ${totalPeople}명</div>
+        <div>출력일시 : ${escapeHtml(new Date().toLocaleString("ko-KR"))}</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:4%;">번호</th>
+            <th style="width:9%;">예약일</th>
+            <th style="width:7%;">시간</th>
+            <th style="width:10%;">고객명</th>
+            <th style="width:12%;">연락처</th>
+            <th style="width:6%;">인원</th>
+            <th style="width:10%;">좌석</th>
+            <th style="width:14%;">메뉴</th>
+            <th style="width:10%;">입금상태</th>
+            <th style="width:10%;">예약상태</th>
+            <th style="width:8%;">담당자</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
 }
 
 function toggleAllReservations(){
@@ -1484,9 +1891,12 @@ function updateDashboardCards(list){
   },0);
 
   const waiting = todayList.filter(function(r){
-    return String(r.depositStatus).includes("미입금") ||
-           String(r.depositStatus).includes("대기");
-  }).length;
+  return Number(r.deposit || 0) > 0 &&
+    (
+      String(r.depositStatus || "").includes("미입금") ||
+      String(r.depositStatus || "").includes("대기")
+    );
+}).length;
 
   const confirmed = todayList.filter(function(r){
     return String(r.reserveStatus).includes("확정");
@@ -1651,12 +2061,13 @@ function updateTodayTasks(list){
   const tomorrowStr = tomorrow.toISOString().slice(0,10);
 
   const waiting = list.filter(function(r){
-    return r.reserveDate===todayStr &&
-      (
-        String(r.depositStatus).includes("미입금") ||
-        String(r.depositStatus).includes("대기")
-      );
-  }).length;
+  return r.reserveDate === todayStr &&
+    Number(r.deposit || 0) > 0 &&
+    (
+      String(r.depositStatus || "").includes("미입금") ||
+      String(r.depositStatus || "").includes("대기")
+    );
+}).length;
 
   const tomorrowGuide=list.filter(function(r){
     return r.reserveDate===tomorrowStr;
@@ -2187,6 +2598,23 @@ function showSection(sectionId){
 
   if(sectionId === "calendarSection"){
     renderCalendar();
+  }
+
+  if(sectionId === "reservationStatusSection"){
+    const startInput = document.getElementById("reservationStartDate");
+    const endInput = document.getElementById("reservationEndDate");
+
+    if(startInput && !startInput.value && endInput && !endInput.value){
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+
+      startInput.value = `${yyyy}-${mm}-${dd}`;
+      endInput.value = "";
+
+      renderReservationTable();
+    }
   }
 
   const target = document.getElementById(sectionId);
