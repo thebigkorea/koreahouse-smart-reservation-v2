@@ -971,7 +971,7 @@
 
           alert(res.message || "예약이 수정되었습니다.");
           closeModal();
-          location.reload();
+          loadReservations();
         })
         .withFailureHandler(function(err){
           alert("예약 수정 오류: " + ((err && err.message) ? err.message : err));
@@ -991,7 +991,7 @@
 
       alert(res.message || "예약이 등록되었습니다.");
       closeModal();
-      location.reload();
+      loadReservations();
     })
         .withFailureHandler(function(err){
           alert("예약 등록 오류: " + ((err && err.message) ? err.message : err));
