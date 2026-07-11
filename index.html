@@ -489,6 +489,62 @@
 
       <section class="panel">
   <div class="panel-title">
+    <div>
+      <h2>오늘 신규 예약 고객</h2>
+      <div style="margin-top:6px;color:#78909c;font-size:13px;font-weight:800;">
+        오늘 새로 등록된 예약입니다.
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span class="badge gray" id="todayNewReservationCount">
+        0건
+      </span>
+
+      <button
+        class="btn btn-light"
+        onclick="toggleAllTodayNewReservations()">
+        전체선택
+      </button>
+
+      <button
+        class="btn btn-yellow"
+        onclick="sendTodayNewReservations()">
+        선택 문자발송
+      </button>
+    </div>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="reservation-table">
+      <thead>
+        <tr>
+          <th style="width:42px;">선택</th>
+          <th>등록시간</th>
+          <th>고객명</th>
+          <th>전화번호</th>
+          <th>예약일</th>
+          <th>예약시간</th>
+          <th>인원</th>
+          <th>좌석</th>
+          <th>문자</th>
+        </tr>
+      </thead>
+
+      <tbody id="todayNewReservationBody">
+        <tr>
+          <td colspan="9"
+              style="padding:30px;text-align:center;color:#78909c;">
+            오늘 신규 예약을 불러오는 중입니다.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+      <section class="panel">
+  <div class="panel-title">
     <h2>오늘 좌석 현황</h2>
     <span class="badge gray">전화 응대용</span>
   </div>
@@ -1067,7 +1123,10 @@ function setReservationSubmitLoading(isLoading){
 
       
 
-      if (selectedCapacity < Number(data.people || 0)) {
+      if (
+  selectedSeats.length > 0 &&
+  selectedCapacity < Number(data.people || 0)
+) {
         const proceed = confirm(
           "선택한 좌석의 총 수용인원은 " + selectedCapacity + "명입니다.\n" +
           "예약 인원은 " + data.people + "명입니다.\n\n" +
@@ -1280,6 +1339,8 @@ function loadReservations(){
       updateTodayTasks(reservationData);
 
       renderTodayTimeline();
+
+      renderTodayNewReservations();
 
       renderTodaySeatStatus();
 
@@ -1981,7 +2042,10 @@ ${r.people}명 · ${r.seat} · ${r.menu}<br>
 
 <div class="reservation-buttons">
 
-<button class="btn btn-light" onclick="location.href='tel:${r.phone}'">전화</button>
+<button class="btn btn-yellow"
+        onclick="openMessageModal('${r.reservationNo}')">
+  문자
+</button>
 
 <button class="btn btn-light" onclick="showReservationDetail('${r.reservationNo}')">상세</button>
 
@@ -1993,6 +2057,166 @@ ${r.people}명 · ${r.seat} · ${r.menu}<br>
 
 `).join("");
 
+}
+
+function renderTodayNewReservations(){
+
+  const tbody =
+    document.getElementById("todayNewReservationBody");
+
+  const count =
+    document.getElementById("todayNewReservationCount");
+
+  if(!tbody) return;
+
+  const now = new Date();
+
+  const today =
+    now.getFullYear() + "-" +
+    String(now.getMonth() + 1).padStart(2, "0") + "-" +
+    String(now.getDate()).padStart(2, "0");
+
+  const list = reservationData
+    .filter(function(r){
+
+      const createdDate =
+        String(r.createdAt || "").slice(0, 10);
+
+      const status =
+        String(r.reserveStatus || "");
+
+      return (
+        createdDate === today &&
+        !status.includes("취소") &&
+        !status.includes("노쇼")
+      );
+    })
+    .sort(function(a, b){
+      return String(b.createdAt || "")
+        .localeCompare(String(a.createdAt || ""));
+    });
+
+  if(count){
+    count.textContent = list.length + "건";
+  }
+
+  if(!list.length){
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9"
+            style="padding:30px;text-align:center;color:#78909c;">
+          오늘 새로 등록된 예약이 없습니다.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map(function(r){
+
+    const createdTime =
+      String(r.createdAt || "").length >= 16
+        ? String(r.createdAt).slice(11, 16)
+        : "-";
+
+    return `
+      <tr>
+        <td>
+          <input
+            type="checkbox"
+            class="today-new-reservation-check"
+            value="${escapeHtml(r.reservationNo)}">
+        </td>
+
+        <td>${escapeHtml(createdTime)}</td>
+
+        <td class="left">
+          <b>${escapeHtml(r.customerName || "-")}</b>
+        </td>
+
+        <td>${escapeHtml(r.phone || "-")}</td>
+
+        <td>${escapeHtml(r.reserveDate || "-")}</td>
+
+        <td>${escapeHtml(r.reserveTime || "-")}</td>
+
+        <td>${escapeHtml(String(r.people || 0))}명</td>
+
+        <td>${escapeHtml(r.seat || "좌석 미정")}</td>
+
+        <td>
+          <button
+            class="btn btn-yellow"
+            style="padding:7px 11px;font-size:12px;"
+            onclick="openMessageModal('${r.reservationNo}')">
+            문자
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function toggleAllTodayNewReservations(){
+
+  const checks =
+    document.querySelectorAll(
+      ".today-new-reservation-check"
+    );
+
+  if(!checks.length) return;
+
+  const allChecked =
+    Array.from(checks).every(function(chk){
+      return chk.checked;
+    });
+
+  checks.forEach(function(chk){
+    chk.checked = !allChecked;
+  });
+}
+
+function sendTodayNewReservations(){
+
+  const selectedNos = Array.from(
+    document.querySelectorAll(
+      ".today-new-reservation-check:checked"
+    )
+  ).map(function(chk){
+    return String(chk.value);
+  });
+
+  const list = reservationData.filter(function(r){
+    return selectedNos.includes(
+      String(r.reservationNo)
+    );
+  });
+
+  if(!list.length){
+    alert("문자를 발송할 신규 예약 고객을 선택하세요.");
+    return;
+  }
+
+  document.getElementById("bulkTargetList").innerHTML =
+    list.map(function(r){
+      return (
+        "☑ " +
+        escapeHtml(r.customerName || "-") +
+        " (" +
+        escapeHtml(r.phone || "-") +
+        ")"
+      );
+    }).join("<br>");
+
+  document.getElementById("bulkMessageText").value = "";
+
+  document.getElementById(
+    "messageModalBg"
+  ).style.display = "flex";
+
+  window.selectedTemplateType = "deposit";
+
+  selectBulkSmsTemplate("deposit");
 }
 
 function renderTodaySeatStatus(){

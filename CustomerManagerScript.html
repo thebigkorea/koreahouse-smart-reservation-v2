@@ -39,20 +39,36 @@ function renderCustomerList(keyword = "") {
     const area = document.getElementById("customerListArea");
     if (!area) return;
 
-    keyword = String(keyword || "").trim();
+    keyword = String(keyword || "")
+    .trim()
+    .toLowerCase();
 
-    const keywordNumber = keyword.replace(/[^0-9]/g, "");
+const keywordName =
+    keyword.replace(/\s+/g,"");
 
-const list = crmCustomers.filter(function(c) {
-    const name = String(c.customerName || "");
+const keywordNumber =
+    keyword.replace(/[^0-9]/g,"");
+
+const list = crmCustomers.filter(function(c){
+
+    const name = String(c.customerName || "")
+        .toLowerCase();
+
+    const nameNoSpace =
+        name.replace(/\s+/g,"");
+
     const phone = String(c.phone || "");
-    const phoneNumber = phone.replace(/[^0-9]/g, "");
+
+    const phoneNumber =
+        phone.replace(/[^0-9]/g,"");
 
     return (
         name.includes(keyword) ||
+        nameNoSpace.includes(keywordName) ||
         phone.includes(keyword) ||
         phoneNumber.includes(keywordNumber)
     );
+
 });
 
     if (!list.length) {
