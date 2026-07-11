@@ -62,12 +62,15 @@ const list = crmCustomers.filter(function(c){
     const phoneNumber =
         phone.replace(/[^0-9]/g,"");
 
-    return (
-        name.includes(keyword) ||
-        nameNoSpace.includes(keywordName) ||
-        phone.includes(keyword) ||
-        phoneNumber.includes(keywordNumber)
-    );
+    const nameMatched =
+    name.includes(keyword) ||
+    nameNoSpace.includes(keywordName);
+
+const phoneMatched =
+    keywordNumber !== "" &&
+    phoneNumber.includes(keywordNumber);
+
+return nameMatched || phoneMatched;
 
 });
 
