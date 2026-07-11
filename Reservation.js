@@ -23,7 +23,17 @@ function createReservation(data) {
   const reservationNo = generateReservationNo_();
   const now = new Date();
   const seatIds = normalizeSeatIds_(data.seats || data.seat || "");
-  const conflict = findSeatConflict_(seatIds, data.reserveDate, data.reserveTime, "");
+
+const seatDisplay = seatIds.length
+  ? seatIds.join(", ")
+  : String(data.seatType || "").trim();
+
+const conflict = findSeatConflict_(
+  seatIds,
+  data.reserveDate,
+  data.reserveTime,
+  ""
+);
 
   if (conflict) {
     return {
@@ -40,7 +50,7 @@ function createReservation(data) {
     data.customerName || "",
     normalizePhone_(data.phone || ""),
     Number(data.people || 0),
-    seatIds.join(", "),
+    seatDisplay,
     data.eventType || "",
     data.menu || "",
     Number(data.deposit || 0),
@@ -145,8 +155,18 @@ function updateReservation(reservationNo, data) {
   const oldData = sheet.getRange(row, 1, 1, 21).getValues()[0];
   const reserveDate = data.reserveDate || oldData[2];
   const reserveTime = data.reserveTime || oldData[3];
-  const seatIds = normalizeSeatIds_(data.seats || data.seat || oldData[7]);
-  const conflict = findSeatConflict_(seatIds, reserveDate, reserveTime, reservationNo);
+  const seatIds = normalizeSeatIds_(data.seats || data.seat || "");
+
+const seatDisplay = seatIds.length
+  ? seatIds.join(", ")
+  : String(data.seatType || "").trim();
+
+const conflict = findSeatConflict_(
+  seatIds,
+  reserveDate,
+  reserveTime,
+  reservationNo
+);
 
   if (conflict) {
     return {
@@ -163,7 +183,7 @@ function updateReservation(reservationNo, data) {
     data.customerName || oldData[4],
     normalizePhone_(data.phone || oldData[5]),
     Number(data.people || oldData[6] || 0),
-    seatIds.join(", "),
+    seatDisplay,
     data.eventType || oldData[8],
     data.menu || oldData[9],
     Number(data.deposit || oldData[10] || 0),
