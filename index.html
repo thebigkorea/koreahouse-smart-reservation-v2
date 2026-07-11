@@ -1065,10 +1065,7 @@ function setReservationSubmitLoading(isLoading){
       const selectedSeats = getSelectedSeats();
       const selectedCapacity = getSelectedCapacity(selectedSeats);
 
-      if (!selectedSeats.length) {
-        alert("좌석을 선택해 주세요.");
-        return;
-      }
+      
 
       if (selectedCapacity < Number(data.people || 0)) {
         const proceed = confirm(

@@ -32,7 +32,10 @@ function loadReservationSmsTargets(showResult){
 
 function searchReservationSmsTargets(){
   const reserveDate = document.getElementById("targetReserveDate").value;
-  const customerName = document.getElementById("targetCustomerName").value.trim().toLowerCase();
+  const customerName = document.getElementById("targetCustomerName")
+  .value
+  .replace(/\s+/g, "")
+  .toLowerCase();
   const phone = document.getElementById("targetPhone").value.replace(/[^0-9]/g, "");
 
   if(!reserveDate && !customerName && !phone){
@@ -48,12 +51,15 @@ function searchReservationSmsTargets(){
     // 날짜조건은 적용하지 않는다.
     if(customerName || phone){
 
-      if(customerName &&
-         !String(item.customerName || "")
-           .toLowerCase()
-           .includes(customerName)){
-        return false;
-      }
+      if(customerName){
+  const itemCustomerName = String(item.customerName || "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+
+  if(!itemCustomerName.includes(customerName)){
+    return false;
+  }
+}
 
       if(phone){
         const itemPhone = String(item.phone || "")
