@@ -1961,9 +1961,19 @@ if(window.selectedTemplateType){
 }
 }
 
+function getLocalTodayString(){
+  const now = new Date();
+
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function updateDashboardCards(list){
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = getLocalTodayString();
 
   const todayList = list.filter(r => r.reserveDate === today);
 
@@ -2017,7 +2027,7 @@ function escapeHtml(value){
 }
 function renderTodayTimeline(){
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = getLocalTodayString();
 
   const list = reservationData
       .filter(r=>r.reserveDate===today)
@@ -2246,7 +2256,7 @@ function renderTodaySeatStatus(){
   const box = document.getElementById("todaySeatStatus");
   if(!box) return;
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = getLocalTodayString();
 
   const todayList = reservationData
     .filter(function(r){
