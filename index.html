@@ -363,6 +363,57 @@
     @media(max-width:720px){
       .seat-map{grid-template-columns:1fr}
     }
+   /* 예약현황 표 좌우 이동 영역 */
+.reservation-table-scroll{
+  width:100%;
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:visible;
+}
+
+/* 예약현황 화면에서만 하단에 표시되는 좌우 스크롤바 */
+.reservation-sticky-scroll{
+  display:none;
+  position:fixed;
+  left:300px;
+  right:30px;
+  bottom:0;
+  z-index:80;
+  height:20px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  background:#fffdf8;
+  border:1px solid #ded2bd;
+  border-bottom:0;
+  border-radius:10px 10px 0 0;
+  box-shadow:0 -4px 12px rgba(0,0,0,.08);
+}
+
+.reservation-sticky-scroll-inner{
+  height:1px;
+  width:0;
+}
+
+.reservation-sticky-scroll::-webkit-scrollbar{
+  height:16px;
+}
+
+.reservation-sticky-scroll::-webkit-scrollbar-thumb{
+  background:#b9a56e;
+  border-radius:999px;
+  border:2px solid #f8f2e6;
+}
+
+.reservation-sticky-scroll::-webkit-scrollbar-track{
+  background:#eee8dc;
+}
+
+@media(max-width:1100px){
+  .reservation-sticky-scroll{
+    left:18px;
+    right:18px;
+  }
+}
 
   </style>
 </head>
@@ -695,7 +746,7 @@
      </button>
   </div>
 
-  <div style="overflow-x:auto;">
+  <div class="reservation-table-scroll">
     <table class="reservation-table">
       <thead>
         <tr>
@@ -711,8 +762,8 @@
           <th>메뉴</th>
           <th>입금</th>
           <th>상태</th>
-          <th>담당자</th>
           <th>관리</th>
+          <th>담당자</th>
         </tr>
       </thead>
       <tbody id="reservationTableBody">
@@ -722,7 +773,18 @@
           </td>
         </tr>
       </tbody>
-    </table>
+        </table>
+  </div>
+
+  <div
+    id="reservationStickyScroll"
+    class="reservation-sticky-scroll"
+    onscroll="syncReservationScrollFromBottom()">
+
+    <div
+      id="reservationStickyScrollInner"
+      class="reservation-sticky-scroll-inner">
+    </div>
   </div>
 </section>
 
@@ -798,6 +860,7 @@
     <option value="">선택 안 함</option>
     <option value="홀">홀</option>
     <option value="룸">룸</option>
+    <option value="창가">창가</option>
   </select>
 
   <div style="
@@ -806,7 +869,7 @@
     font-size:12px;
     font-weight:800;
   ">
-    ※ 특정 좌석을 정하지 않은 경우 홀 또는 룸을 선택하세요.
+    ※ 특정 좌석을 정하지 않은 경우 홀, 룸 또는 창가를 선택하세요.
   </div>
 </div>
 
@@ -891,7 +954,7 @@
   document.getElementById("reserveDate").value = "";
   document.getElementById("reserveTime").value = "";
   document.getElementById("customerName").value = "";
-  document.getElementById("phone").value = "";
+  document.getElementById("phone").value = "010-";
   document.getElementById("people").value = "";
   document.getElementById("seat").value = "";
   document.getElementById("seatType").value = "";
@@ -1431,10 +1494,15 @@ document.getElementById("reservationCount").textContent =
     list.length + "건 · " + totalPeople + "명";
 
   if (!list.length) {
-    tbody.innerHTML =
-      '<tr><td colspan="12" style="padding:30px;text-align:center;color:#78909c;">예약 내역이 없습니다.</td></tr>';
-    return;
-  }
+  tbody.innerHTML =
+    '<tr><td colspan="12" style="padding:30px;text-align:center;color:#78909c;">예약 내역이 없습니다.</td></tr>';
+
+  requestAnimationFrame(function(){
+    setupReservationHorizontalScroll();
+  });
+
+  return;
+}
 
   tbody.innerHTML = list.map(function(r){
     return `
@@ -1457,49 +1525,118 @@ document.getElementById("reservationCount").textContent =
     : "-"}
 </td>
         <td>${badgeText(r.reserveStatus)}</td>
-        <td>${escapeHtml(r.staff)}</td>
-        <td>
-          <div class="table-actions">
-            <button class="btn btn-light"
-              onclick="showReservationDetailByInfo('${escapeHtml(r.reserveDate)}','${escapeHtml(r.reserveTime)}','${escapeHtml(r.customerName)}')">
-              상세
-            </button>
 
-            <button class="btn btn-light"
-              onclick="openEditReservation('${r.reservationNo}')">
-              수정
-            </button>
+<td>
+  <div class="table-actions">
+    <button class="btn btn-light"
+      onclick="showReservationDetailByInfo('${escapeHtml(r.reserveDate)}','${escapeHtml(r.reserveTime)}','${escapeHtml(r.customerName)}')">
+      상세
+    </button>
 
-            <button class="btn btn-green"
-              onclick="markDepositDone('${r.reservationNo}')">
-              입금
-            </button>
+    <button class="btn btn-light"
+      onclick="openEditReservation('${r.reservationNo}')">
+      수정
+    </button>
 
-            <button class="btn btn-light"
-              onclick="confirmReservation('${r.reservationNo}')">
-              확정
-            </button>
+    <button class="btn btn-green"
+      onclick="markDepositDone('${r.reservationNo}')">
+      입금
+    </button>
 
-            <button class="btn btn-yellow"
-              onclick="openMessageModal('${r.reservationNo}')">
-              문자
-            </button>
-          </div>
-        </td>
+    <button class="btn btn-light"
+      onclick="confirmReservation('${r.reservationNo}')">
+      확정
+    </button>
+
+    <button class="btn btn-yellow"
+      onclick="openMessageModal('${r.reservationNo}')">
+      문자
+    </button>
+  </div>
+</td>
+
+<td>${escapeHtml(r.staff || "-")}</td>
       </tr>
     `;
-  }).join("");
+   }).join("");
+
+  requestAnimationFrame(function(){
+    setupReservationHorizontalScroll();
+  });
 }
 
-function clearReservationDateFilter(){
-  const start = document.getElementById("reservationStartDate");
-  const end = document.getElementById("reservationEndDate");
+function setupReservationHorizontalScroll(){
+  const section =
+    document.getElementById("reservationStatusSection");
 
-  if(start) start.value = "";
-  if(end) end.value = "";
+  const tableWrap = document.querySelector(
+    "#reservationStatusSection .reservation-table-scroll"
+  );
 
-  renderReservationTable();
+  const table = document.querySelector(
+    "#reservationStatusSection .reservation-table"
+  );
+
+  const bottomScroll =
+    document.getElementById("reservationStickyScroll");
+
+  const bottomInner =
+    document.getElementById("reservationStickyScrollInner");
+
+  if(!section || !tableWrap || !table || !bottomScroll || !bottomInner){
+    return;
+  }
+
+  const sectionVisible =
+    window.getComputedStyle(section).display !== "none";
+
+  if(!sectionVisible){
+    bottomScroll.style.display = "none";
+    return;
+  }
+
+  const hasHorizontalOverflow =
+    table.scrollWidth > tableWrap.clientWidth + 1;
+
+  if(!hasHorizontalOverflow){
+    bottomScroll.style.display = "none";
+    bottomScroll.scrollLeft = 0;
+    tableWrap.scrollLeft = 0;
+    return;
+  }
+
+  bottomInner.style.width = table.scrollWidth + "px";
+  bottomScroll.style.display = "block";
+  bottomScroll.scrollLeft = tableWrap.scrollLeft;
+
+  tableWrap.onscroll = function(){
+    if(bottomScroll.scrollLeft !== tableWrap.scrollLeft){
+      bottomScroll.scrollLeft = tableWrap.scrollLeft;
+    }
+  };
 }
+
+function syncReservationScrollFromBottom(){
+  const tableWrap = document.querySelector(
+    "#reservationStatusSection .reservation-table-scroll"
+  );
+
+  const bottomScroll =
+    document.getElementById("reservationStickyScroll");
+
+  if(!tableWrap || !bottomScroll){
+    return;
+  }
+
+  if(tableWrap.scrollLeft !== bottomScroll.scrollLeft){
+    tableWrap.scrollLeft = bottomScroll.scrollLeft;
+  }
+}
+window.addEventListener("resize", function(){
+  requestAnimationFrame(function(){
+    setupReservationHorizontalScroll();
+  });
+});
 
 function setReservationDateQuickFilter(type){
   const startInput =
@@ -1627,6 +1764,21 @@ function printFilteredReservations(){
       ? (startDate || "처음") + " ~ " + (endDate || "마지막")
       : "전체 기간";
 
+  function formatPrintDeposit(r){
+  const status = String(r.depositStatus || "-");
+  const amount = Number(
+    String(r.deposit || 0).replace(/[^0-9]/g, "")
+  );
+
+  if(status.includes("완료") && amount > 0){
+    return status + " (" +
+      amount.toLocaleString("ko-KR") +
+      "원)";
+  }
+
+  return status;
+}    
+
   const rows = list.map(function(r, index){
     return `
       <tr>
@@ -1638,7 +1790,7 @@ function printFilteredReservations(){
         <td>${escapeHtml(String(r.people || 0))}명</td>
         <td>${escapeHtml(r.seat || "-")}</td>
         <td>${escapeHtml(r.menu || "-")}</td>
-        <td>${escapeHtml(r.depositStatus || "-")}</td>
+        <td>${escapeHtml(formatPrintDeposit(r))}</td>
         <td>${escapeHtml(r.reserveStatus || "-")}</td>
         <td>${escapeHtml(r.staff || "-")}</td>
       </tr>
@@ -2417,7 +2569,7 @@ function openEditReservation(reservationNo){
   document.getElementById("customerName").value = item.customerName;
   document.getElementById("phone").value = item.phone;
   document.getElementById("people").value = item.people;
-  if(item.seat === "홀" || item.seat === "룸"){
+  if(item.seat === "홀" || item.seat === "룸" || item.seat === "창가"){
   document.getElementById("seat").value = "";
   document.getElementById("seatType").value = item.seat;
 }else{
@@ -2728,6 +2880,9 @@ function sendNextBulkSMS(list, index, type){
     })
     .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
 }
+
+let smsTemplateRequestId = 0;
+
 function selectBulkSmsTemplate(type){
   window.selectedTemplateType = type;
 
@@ -2744,6 +2899,8 @@ function selectBulkSmsTemplate(type){
     return;
   }
 
+  const requestId = ++smsTemplateRequestId;
+
   if(type === "custom"){
     textarea.value = "";
     textarea.focus();
@@ -2754,11 +2911,17 @@ function selectBulkSmsTemplate(type){
 
   google.script.run
     .withSuccessHandler(function(message){
+      if(requestId !== smsTemplateRequestId) return;
       textarea.value = message || "";
     })
     .withFailureHandler(function(err){
+      if(requestId !== smsTemplateRequestId) return;
+
       textarea.value = "";
-      alert("템플릿 불러오기 오류: " + ((err && err.message) ? err.message : err));
+      alert(
+        "템플릿 불러오기 오류: " +
+        ((err && err.message) ? err.message : err)
+      );
     })
     .renderSmsTemplate(type, list[0]);
 }
@@ -2835,12 +2998,15 @@ function openMessageModal(reservationNo){
     chk.checked = String(chk.value) === String(reservationNo);
   });
 
-  targetList.innerHTML = "☑ " + item.customerName + " (" + item.phone + ")";
+  targetList.innerHTML =
+    "☑ " + item.customerName + " (" + item.phone + ")";
+
   messageText.value = "";
-  window.selectedTemplateType = "custom";
-  modalBg.style.display = "flex";
+window.selectedTemplateType = "deposit";
+modalBg.style.display = "flex";
+
+selectBulkSmsTemplate("deposit");
 }
-let calendarDate = new Date();
 
 function showSection(sectionId){
   const sections = [
@@ -2861,21 +3027,32 @@ function showSection(sectionId){
   }
 
   if(sectionId === "reservationStatusSection"){
-    const startInput = document.getElementById("reservationStartDate");
-    const endInput = document.getElementById("reservationEndDate");
+  const startInput = document.getElementById("reservationStartDate");
+  const endInput = document.getElementById("reservationEndDate");
 
-    if(startInput && !startInput.value && endInput && !endInput.value){
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
+  if(startInput && !startInput.value && endInput && !endInput.value){
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
 
-      startInput.value = `${yyyy}-${mm}-${dd}`;
-      endInput.value = "";
+    startInput.value = `${yyyy}-${mm}-${dd}`;
+    endInput.value = "";
 
-      renderReservationTable();
-    }
+    renderReservationTable();
   }
+
+  requestAnimationFrame(function(){
+    setupReservationHorizontalScroll();
+  });
+}else{
+  const bottomScroll =
+    document.getElementById("reservationStickyScroll");
+
+  if(bottomScroll){
+    bottomScroll.style.display = "none";
+  }
+}
 
   const target = document.getElementById(sectionId);
   if(target){
@@ -3494,6 +3671,7 @@ function printDailyReservationSchedule(){
         print-color-adjust: exact;
       }
     }
+   
 
   </style>
 </head>
