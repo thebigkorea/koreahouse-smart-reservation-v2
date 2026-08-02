@@ -859,4 +859,40 @@
     font-size:14px;
   }
 }
+/* 카톡용 예약 일정표 미리보기 */
+.kakao-schedule-modal {
+  width: min(760px, calc(100vw - 30px));
+  max-width: 760px;
+}
+
+.kakao-schedule-preview {
+  max-height: 65vh;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid #eee0c8;
+  border-radius: 16px;
+  background: #eee9df;
+  text-align: center;
+}
+
+.kakao-schedule-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 8px 25px rgba(24, 37, 45, 0.14);
+}
+
+@media (max-width: 720px) {
+  .kakao-schedule-modal {
+    width: calc(100vw - 20px);
+  }
+
+  .kakao-schedule-preview {
+    max-height: 60vh;
+    padding: 8px;
+  }
+}
   </style>

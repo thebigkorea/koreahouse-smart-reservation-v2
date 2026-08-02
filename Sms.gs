@@ -384,7 +384,7 @@ function buildSmsMessage_(type, data) {
 }
 function getSmsTemplate(templateId) {
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+   const ss = getDB_();
   const sheet = ss.getSheetByName("SmsTemplates");
 
   if (!sheet) {
@@ -408,7 +408,7 @@ function getSmsTemplate(templateId) {
 
 function saveSmsTemplate(data) {
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+   const ss = getDB_();
   const sheet = ss.getSheetByName("SmsTemplates");
 
   if (!sheet) {
@@ -439,6 +439,7 @@ function saveSmsTemplate(data) {
 function renderSmsTemplate(templateId, item) {
 
   const t = getSmsTemplate(templateId);
+
   if (!t) return "";
 
   let text = String(t.content || "").replaceAll("\\n", "\n");
@@ -453,8 +454,35 @@ function renderSmsTemplate(templateId, item) {
   text = text.replaceAll("{좌석}", item.seat || "");
   text = text.replaceAll("{메뉴}", item.menu || "");
 
+  if (templateId === "deposit") {
+
+    const depositNumber = Number(
+      String(item.deposit || 0).replace(/[^0-9]/g, "")
+    );
+
+    const depositLine = depositNumber > 0
+      ? "예약금 : " +
+        depositNumber.toLocaleString("ko-KR") +
+        "원\n\n"
+      : "";
+
+    text = text.replace(
+      "예약금 입금 확인 후 예약이 최종 확정됩니다.",
+`${depositLine}■ 예약금 입금계좌
+
+은행 : 하나은행
+계좌번호 : 602-910043-80-104
+예금주 : 한국의집 롯데월드몰
+
+※ 입금자명은 예약자 성함으로 부탁드립니다.
+
+예약금 입금 확인 후 예약이 최종 확정됩니다.`
+    );
+  }
+
   return text;
 }
+
 function formatSmsDate_(value) {
 
   if (!value) return "";
