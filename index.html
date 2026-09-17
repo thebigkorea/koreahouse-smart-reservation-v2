@@ -1665,8 +1665,6 @@ document.getElementById("reservationCount").textContent =
       onclick="openMessageModal('${r.reservationNo}')">
       문자
     </button>
-  </div>
-  <div style="margin-top:6px;line-height:1.65;text-align:left;white-space:nowrap;">
     ${smsSendStatusHtml(r)}
   </div>
 </td>
@@ -1683,17 +1681,12 @@ document.getElementById("reservationCount").textContent =
 
 function smsSendStatusHtml(r){
   const deposit = r.depositSmsAt
-    ? '<span style="color:#257942;font-size:12px;font-weight:700;">✓ 예약금 안내 ' + escapeHtml(shortSmsDate_(r.depositSmsAt)) + '</span>'
-    : '<span style="color:#9aa3a8;font-size:12px;">○ 예약금 안내 미발송</span>';
+    ? '<span title="예약금 안내 발송: ' + escapeHtml(r.depositSmsAt) + '" style="display:inline-flex;align-items:center;height:28px;padding:0 8px;border-radius:8px;background:#dff1df;color:#24713c;font-size:11px;font-weight:800;">예약금 ✓</span>'
+    : '<span title="예약금 안내 미발송" style="display:inline-flex;align-items:center;height:28px;padding:0 8px;border-radius:8px;background:#f1f0ec;color:#9a9a94;font-size:11px;font-weight:700;">예약금 ○</span>';
   const confirmSms = r.confirmSmsAt
-    ? '<span style="color:#257942;font-size:12px;font-weight:700;">✓ 확정문자 ' + escapeHtml(shortSmsDate_(r.confirmSmsAt)) + '</span>'
-    : '<span style="color:#9aa3a8;font-size:12px;">○ 확정문자 미발송</span>';
-  return deposit + '<br>' + confirmSms;
-}
-
-function shortSmsDate_(value){
-  const text = String(value || '');
-  return text.length >= 16 ? text.slice(5, 16) : text;
+    ? '<span title="예약확정 문자 발송: ' + escapeHtml(r.confirmSmsAt) + '" style="display:inline-flex;align-items:center;height:28px;padding:0 8px;border-radius:8px;background:#dff1df;color:#24713c;font-size:11px;font-weight:800;">확정 ✓</span>'
+    : '<span title="예약확정 문자 미발송" style="display:inline-flex;align-items:center;height:28px;padding:0 8px;border-radius:8px;background:#f1f0ec;color:#9a9a94;font-size:11px;font-weight:700;">확정 ○</span>';
+  return deposit + confirmSms;
 }
 
 function setupReservationHorizontalScroll(){
