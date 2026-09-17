@@ -1666,6 +1666,9 @@ document.getElementById("reservationCount").textContent =
       문자
     </button>
   </div>
+  <div style="margin-top:6px;line-height:1.65;text-align:left;white-space:nowrap;">
+    ${smsSendStatusHtml(r)}
+  </div>
 </td>
 
 <td>${escapeHtml(r.staff || "-")}</td>
@@ -1676,6 +1679,21 @@ document.getElementById("reservationCount").textContent =
   requestAnimationFrame(function(){
     setupReservationHorizontalScroll();
   });
+}
+
+function smsSendStatusHtml(r){
+  const deposit = r.depositSmsAt
+    ? '<span style="color:#257942;font-size:12px;font-weight:700;">✓ 예약금 안내 ' + escapeHtml(shortSmsDate_(r.depositSmsAt)) + '</span>'
+    : '<span style="color:#9aa3a8;font-size:12px;">○ 예약금 안내 미발송</span>';
+  const confirmSms = r.confirmSmsAt
+    ? '<span style="color:#257942;font-size:12px;font-weight:700;">✓ 확정문자 ' + escapeHtml(shortSmsDate_(r.confirmSmsAt)) + '</span>'
+    : '<span style="color:#9aa3a8;font-size:12px;">○ 확정문자 미발송</span>';
+  return deposit + '<br>' + confirmSms;
+}
+
+function shortSmsDate_(value){
+  const text = String(value || '');
+  return text.length >= 16 ? text.slice(5, 16) : text;
 }
 
 function setupReservationHorizontalScroll(){
@@ -2993,7 +3011,7 @@ function sendNextBulkSMS(list, index, type){
     .withFailureHandler(function(err){
       alert("문자 발송 오류: " + ((err && err.message) ? err.message : err));
     })
-    .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
+    .sendReservationSms(item.phone, item.customerName, message, item.reservationNo, type);
 }
 
 let smsTemplateRequestId = 0;
@@ -3062,10 +3080,10 @@ function sendBulkMessagesV2(){
     return;
   }
 
-  sendNextBulkSMSV2(list, 0, message);
+  sendNextBulkSMSV2(list, 0, message, type);
 }
 
-function sendNextBulkSMSV2(list, index, message){  
+function sendNextBulkSMSV2(list, index, message, type){  
 
   if(index >= list.length){
     alert(list.length + "명 문자 발송 완료");
@@ -3083,12 +3101,12 @@ function sendNextBulkSMSV2(list, index, message){
         return;
       }
 
-      sendNextBulkSMSV2(list, index + 1, message);
+      sendNextBulkSMSV2(list, index + 1, message, type);
     })
     .withFailureHandler(function(err){
       alert("문자 발송 오류: " + ((err && err.message) ? err.message : err));
     })
-    .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
+    .sendReservationSms(item.phone, item.customerName, message, item.reservationNo, type);
 }
 function openMessageModal(reservationNo){
   const item = reservationData.find(function(r){
