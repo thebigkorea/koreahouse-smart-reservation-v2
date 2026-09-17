@@ -431,10 +431,28 @@ function renderReservationTable(){
             <button class="btn btn-yellow" onclick="openMessageModal('${r.reservationNo}')">문자</button>
            <button class="btn btn-cancel" onclick="cancelReservation('${r.reservationNo}')">취소</button>
           </div>
+          <div style="margin-top:6px;line-height:1.65;text-align:left;white-space:nowrap;">
+            ${smsSendStatusHtml(r)}
+          </div>
         </td>
       </tr>
     `;
   }).join("");
+}
+
+function smsSendStatusHtml(r){
+  const deposit = r.depositSmsAt
+    ? '<span style="color:#257942;font-size:12px;font-weight:700;">✓ 예약금 안내 ' + escapeHtml(shortSmsDate_(r.depositSmsAt)) + '</span>'
+    : '<span style="color:#9aa3a8;font-size:12px;">○ 예약금 안내 미발송</span>';
+  const confirmSms = r.confirmSmsAt
+    ? '<span style="color:#257942;font-size:12px;font-weight:700;">✓ 확정문자 ' + escapeHtml(shortSmsDate_(r.confirmSmsAt)) + '</span>'
+    : '<span style="color:#9aa3a8;font-size:12px;">○ 확정문자 미발송</span>';
+  return deposit + '<br>' + confirmSms;
+}
+
+function shortSmsDate_(value){
+  const text = String(value || '');
+  return text.length >= 16 ? text.slice(5, 16) : text;
 }
 
 function updateDashboardCards(list){
@@ -836,8 +854,6 @@ function chooseSmsType_(){
 }
 
 function openMessageModal(reservationNo){
-  alert("개별 문자 버튼 클릭됨: " + reservationNo);
-
   const item = reservationData.find(function(r){
     return String(r.reservationNo) === String(reservationNo);
   });
@@ -885,7 +901,7 @@ function confirmAndSendOneSms_(item, message){
     .withFailureHandler(function(err){
       alert("문자 발송 오류: " + ((err && err.message) ? err.message : err));
     })
-    .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
+    .sendReservationSms(item.phone, item.customerName, message, item.reservationNo, "custom");
 }
 
 function selectMessageTemplate(type){   
@@ -1009,7 +1025,7 @@ function sendBulkSmsNow_(list, index, type, item, message){
     .withFailureHandler(function(err){
       alert(item.customerName + " 문자 발송 오류: " + ((err && err.message) ? err.message : err));
     })
-    .sendCustomerSMS(item.phone, item.customerName, message, item.reservationNo);
+    .sendReservationSms(item.phone, item.customerName, message, item.reservationNo, type);
 }
 
 function sendSelectedReservations(){

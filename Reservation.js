@@ -81,11 +81,12 @@ const conflict = findSeatConflict_(
 
 function getAllReservations() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Reservations");
+  ensureSmsStatusColumns_(sheet);
   const lastRow = sheet.getLastRow();
 
   if (lastRow <= 1) return [];
 
-  const values = sheet.getRange(2, 1, lastRow - 1, 21).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, 23).getValues();
 
   return values
     .filter(function(row) {
@@ -115,6 +116,8 @@ function getAllReservations() {
         visitDone: row[18],
         visitDoneAt: formatDateTime_(row[19]),
         updatedAt: formatDateTime_(row[20])
+        ,depositSmsAt: formatDateTime_(row[21])
+        ,confirmSmsAt: formatDateTime_(row[22])
       };
     });
 }
@@ -274,6 +277,7 @@ function markDepositDone(reservationNo, staff) {
 
 function confirmReservation(reservationNo, staff) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Reservations");
+  ensureSmsStatusColumns_(sheet);
   const row = findReservationRow_(reservationNo);
 
   if (!row) {
@@ -310,7 +314,10 @@ function confirmReservation(reservationNo, staff) {
     reservationNo
   );
 
-  sheet.getRange(row, 17).setValue("완료");
+  if (!smsResult || smsResult.ok !== false) {
+    sheet.getRange(row, 17).setValue("완료");
+    sheet.getRange(row, 23).setValue(new Date());
+  }
 
   writeReservationLog_(reservationNo, "예약확정", "예약상태", "", RESERVATION_STATUS.CONFIRMED, staff || "");
 
@@ -582,11 +589,12 @@ function upsertCustomerFromReservation_(data) {
 
 function sortReservations_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Reservations");
+  ensureSmsStatusColumns_(sheet);
   const lastRow = sheet.getLastRow();
 
   if (lastRow <= 2) return;
 
-  sheet.getRange(2, 1, lastRow - 1, 21).sort([
+  sheet.getRange(2, 1, lastRow - 1, 23).sort([
     { column: 3, ascending: true },
     { column: 4, ascending: true }
   ]);
@@ -791,4 +799,43 @@ function renderCalendar(){
   html += "</tbody></table>";
 
   area.innerHTML = html;
+}
+
+/**
+ * 예약현황에서 문자 종류별 발송 여부를 정확히 표시하기 위한 발송 함수.
+ * type: deposit(예약금 안내), confirm(확정), tomorrow(내일 안내), 기타
+ */
+function sendReservationSms(phone, customerName, message, reservationNo, type) {
+  const result = sendCustomerSMS(phone, customerName, message, reservationNo);
+
+  if (result && result.ok === false) return result;
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Reservations");
+  ensureSmsStatusColumns_(sheet);
+  const row = findReservationRow_(reservationNo);
+  const now = new Date();
+
+  if (row) {
+    if (type === "deposit") {
+      sheet.getRange(row, 22).setValue(now);
+      writeReservationLog_(reservationNo, "예약금 안내문자 발송", "문자발송", "", formatDateTime_(now), "");
+    } else if (type === "confirm") {
+      sheet.getRange(row, 17).setValue("완료");
+      sheet.getRange(row, 23).setValue(now);
+      writeReservationLog_(reservationNo, "예약확정 문자 발송", "문자발송", "", formatDateTime_(now), "");
+    } else if (type === "tomorrow") {
+      sheet.getRange(row, 18).setValue("완료");
+    }
+  }
+
+  return result || { ok: true, message: "문자가 발송되었습니다." };
+}
+
+function ensureSmsStatusColumns_(sheet) {
+  if (!sheet) throw new Error("Reservations 시트를 찾을 수 없습니다.");
+  if (sheet.getMaxColumns() < 23) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 23 - sheet.getMaxColumns());
+  }
+  if (!sheet.getRange(1, 22).getValue()) sheet.getRange(1, 22).setValue("예약금안내 발송시각");
+  if (!sheet.getRange(1, 23).getValue()) sheet.getRange(1, 23).setValue("확정문자 발송시각");
 }
